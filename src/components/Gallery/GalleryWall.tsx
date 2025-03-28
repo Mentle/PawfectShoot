@@ -14,46 +14,46 @@ interface GalleryWallProps {
   scrollSpeed?: number
 }
 
-// Sample pet photography images (replace with your actual images)
+// Sample pet photography images with proper path handling for Vite
 const sampleImages = [
   {
-    src: '/images/pet1.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet1.jpg`,
     height: 1.2
   },
   {
-    src: '/images/pet2.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet2.jpg`,
     height: 1.5
   },
   {
-    src: '/images/pet3.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet3.jpg`,
     height: 1.0
   },
   {
-    src: '/images/pet4.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet4.jpg`,
     height: 1.8
   },
   {
-    src: '/images/pet5.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet5.jpg`,
     height: 1.3
   },
   {
-    src: '/images/pet6.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet6.jpg`,
     height: 1.2
   },
   {
-    src: '/images/pet7.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet7.jpg`,
     height: 1.4
   },
   {
-    src: '/images/pet8.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet8.jpg`,
     height: 1.6
   },
   {
-    src: '/images/pet9.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet9.jpg`,
     height: 1.3
   },
   {
-    src: '/images/pet10.jpg',
+    src: `${import.meta.env.BASE_URL}images/pet10.jpg`,
     height: 1.5
   }
 ]
