@@ -15,12 +15,30 @@ interface WallsProps {
 export const Walls = ({ viewport }: WallsProps) => {
   const wallsRef = useRef<Mesh>(null)
   
-  // Add state for offset values that can be adjusted for the perfect effect
-  const [galleryOffsets, setGalleryOffsets] = useState({
+  // Define offset values for mobile and desktop views
+  const mobileOffsets = {
     wall: 3.4,
-    floor: 0.5, // Starting value - adjust as needed
-    ceiling: 6.355 // Starting value - adjust as needed
-  });
+    floor: 0.5,
+    ceiling: 6.355
+  };
+  
+  const desktopOffsets = {
+    wall: 2.8,    // Default desktop values - adjust as needed
+    floor: 0.7,   // Default desktop values - adjust as needed
+    ceiling: 5.2  // Default desktop values - adjust as needed
+  };
+  
+  // Initialize with appropriate offsets based on viewport
+  const initialOffsets = viewport.aspect < 1 ? mobileOffsets : desktopOffsets;
+  
+  // Add state for offset values that can be adjusted for the perfect effect
+  const [galleryOffsets, setGalleryOffsets] = useState(initialOffsets);
+  
+  // Update offsets when viewport changes
+  useEffect(() => {
+    const newOffsets = viewport.aspect < 1 ? mobileOffsets : desktopOffsets;
+    setGalleryOffsets(newOffsets);
+  }, [viewport.aspect]);
 
   // Add keyboard controls to adjust offsets in real-time
   useEffect(() => {
@@ -64,9 +82,21 @@ export const Walls = ({ viewport }: WallsProps) => {
         }));
       }
       
+      // Save current offsets to the appropriate preset when 'S' is pressed
+      else if (event.key === 'S' && event.shiftKey) {
+        if (viewport.aspect < 1) {
+          console.log('Saving current offsets as mobile preset:', galleryOffsets);
+          // In a real app, you might want to persist these values
+        } else {
+          console.log('Saving current offsets as desktop preset:', galleryOffsets);
+          // In a real app, you might want to persist these values
+        }
+      }
+      
       // Log current offsets when 'L' is pressed
       else if (event.key.toLowerCase() === 'l') {
         console.log('Current Gallery Offsets:', galleryOffsets);
+        console.log('Viewport aspect:', viewport.aspect, viewport.aspect < 1 ? '(mobile)' : '(desktop)');
       }
     };
 
@@ -78,12 +108,14 @@ export const Walls = ({ viewport }: WallsProps) => {
     console.log('- Left/Right Arrows: Adjust ceiling offset');
     console.log('- W/S Keys: Adjust wall offset (if needed)');
     console.log('- Press L to log current offset values');
+    console.log('- Press Shift+S to save current values as preset for current view mode');
     console.log('- Negative values are allowed for all offsets');
+    console.log('Current view mode:', viewport.aspect < 1 ? 'Mobile' : 'Desktop');
     
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [galleryOffsets]);
+  }, [galleryOffsets, viewport.aspect]);
 
   useFrame(() => {
     if (wallsRef.current) {
@@ -158,7 +190,7 @@ export const Walls = ({ viewport }: WallsProps) => {
           anchorX="center"
           anchorY="middle"
         >
-          Use arrow keys to adjust offsets
+          {viewport.aspect < 1 ? 'Mobile View' : 'Desktop View'}
         </Text>
         
         <Text

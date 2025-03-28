@@ -103,14 +103,6 @@ export const GalleryWall = ({
         <meshStandardMaterial color="#f0f0f0" />
       </mesh>
       
-      {/* Wall title */}
-      <group position={[0, height/2 - 0.5, 0.01]}>
-        <mesh>
-          <planeGeometry args={[width * 0.6, 0.4]} />
-          <meshStandardMaterial color="#333" />
-        </mesh>
-      </group>
-      
       {/* Scrolling image column - Wall (center) */}
       <ScrollingColumn 
         images={sampleImages} 
