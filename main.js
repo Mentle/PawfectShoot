@@ -3,14 +3,22 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 let scene, camera, renderer, controls;
 let wallWidth, wallHeight, wallDistance, floorSize;
-let galleryTexture; // Texture variable
+let galleryTexture; // Original loaded texture
+let floorTexture, wallTexture, ceilingTexture; // Cloned textures for each section
 const clock = new THREE.Clock(); // Clock for deltaTime
-const scrollSpeed = 0.05; // Adjust scroll speed as needed
+const scrollSpeed = 0.02; // Adjust scroll speed as needed
 
-// --- Offset Logic ---
-const mobileOffsets = { wall: 3.4, floor: 0.5, ceiling: 0 }; // Reset ceiling offset
-const desktopOffsets = { wall: 2.8, floor: 0.855, ceiling: 0 }; // Reset ceiling offset
-let currentOffsets = {};
+// --- Geometry Offset Logic (Kept for potential future use or other adjustments) ---
+const mobileOffsets = { wall: 0, floor: 0, ceiling: 0 };
+const desktopOffsets = { wall: 2.8, floor: 0.855, ceiling: 0 };
+let currentOffsets = {}; // For geometry position adjustments
+
+// --- Texture Scroll Offset Logic ---
+// These will now represent the FIXED starting V-coordinate offset for each section
+const desktopTextureOffsets = { wall: 0, floor: -0.178, ceiling: 0.213}; // Hardcoded from user feedback
+const mobileTextureOffsets = { wall: 0, floor: -0.133, ceiling: 0.133};    // Default mobile offsets (adjust if needed)
+let currentTextureOffsets = {}; // Holds the active set (desktop or mobile)
+let baseScrollOffset = 0; // Unified scroll position tracker
 
 // --- DOM Elements ---
 const container = document.getElementById('container');
@@ -53,16 +61,44 @@ function init() {
 
     // Texture Loader
     const textureLoader = new THREE.TextureLoader();
-    galleryTexture = textureLoader.load('public/images/gallery_strip_vertical.png', 
+    textureLoader.load('public/images/gallery_strip_vertical.png', 
         (texture) => { // onLoad callback
             // Configure texture once loaded
-            texture.wrapS = THREE.ClampToEdgeWrapping; // Clamp horizontally (no repeat)
-            texture.wrapT = THREE.RepeatWrapping; // Repeat vertically (for wall scroll)
-            texture.minFilter = THREE.LinearMipmapLinearFilter;
-            texture.magFilter = THREE.LinearFilter;
-            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-            console.log('Gallery texture loaded and configured.');
-            // Initial update for texture repeat values
+            galleryTexture = texture;
+            galleryTexture.wrapS = THREE.RepeatWrapping;
+            galleryTexture.wrapT = THREE.RepeatWrapping;
+            galleryTexture.colorSpace = THREE.SRGBColorSpace;
+
+            // --- Clone Texture for each section ---
+            floorTexture = galleryTexture.clone();
+            floorTexture.needsUpdate = true;
+            wallTexture = galleryTexture.clone();
+            wallTexture.needsUpdate = true;
+            ceilingTexture = galleryTexture.clone();
+            ceilingTexture.needsUpdate = true;
+
+            // --- Assign CLONED textures to materials ---
+            const galleryWallMesh = scene.getObjectByName("gallery_wall"); // Assuming this is the 'wall' part
+            if (galleryWallMesh) {
+                galleryWallMesh.material.map = wallTexture;
+                galleryWallMesh.material.needsUpdate = true;
+            }
+
+            const floorMesh = scene.getObjectByName("gallery_floor"); // CORRECTED: Target gallery floor
+            if (floorMesh) {
+                floorMesh.material.map = floorTexture;
+                floorMesh.material.needsUpdate = true;
+            }
+
+            const ceilingMesh = scene.getObjectByName("gallery_ceiling"); // CORRECTED: Target gallery ceiling
+            if (ceilingMesh) {
+                ceilingMesh.material.map = ceilingTexture;
+                ceilingMesh.material.needsUpdate = true;
+            }
+            // -----------------------------------------
+
+            console.log('Gallery texture loaded and assigned to sections.');
+            // updateDimensionsAndOffsets might still be needed for scaling etc., ensure it doesn't overwrite maps
             updateDimensionsAndOffsets(); 
         },
         undefined, // onProgress callback (optional)
@@ -116,26 +152,34 @@ function createRoomGeometry() {
     const actualCeilingMaterial = new THREE.MeshStandardMaterial({ color: '#f0f0f0', side: THREE.DoubleSide });
     actualCeilingMaterial.name = "actualCeilingMaterial";
 
-    const galleryFloorCeilingMaterial = new THREE.MeshStandardMaterial({ 
+    const galleryFloorMaterial = new THREE.MeshStandardMaterial({ 
         color: '#ffffff', // White base color
         side: THREE.DoubleSide, 
-        map: galleryTexture, // Use the same texture 
-        transparent: true // Restore transparency
+        map: null, // Texture assigned later in init
+        transparent: true 
     });
-    galleryFloorCeilingMaterial.name = "galleryFloorCeilingMaterial"; // Renamed
+    galleryFloorMaterial.name = "galleryFloorMaterial"; 
+
+    const galleryCeilingMaterial = new THREE.MeshStandardMaterial({ 
+        color: '#ffffff', // White base color
+        side: THREE.DoubleSide, 
+        map: null, // Texture assigned later in init
+        transparent: true
+    });
+    galleryCeilingMaterial.name = "galleryCeilingMaterial";
 
     // Create Meshes (will be positioned/scaled in updateDimensionsAndOffsets)
     
     // --- Gallery Surfaces ---
-    const gallery_wall = new THREE.Mesh(wallGeometry, galleryWallMaterial); // Renamed
+    const gallery_wall = new THREE.Mesh(wallGeometry, galleryWallMaterial); 
     gallery_wall.name = "gallery_wall";
     roomGroup.add(gallery_wall);
 
-    const gallery_floor = new THREE.Mesh(floorCeilingGeometry, galleryFloorCeilingMaterial); // Renamed
+    const gallery_floor = new THREE.Mesh(floorCeilingGeometry, galleryFloorMaterial); // Use separate floor material
     gallery_floor.name = "gallery_floor";
     roomGroup.add(gallery_floor);
 
-    const gallery_ceiling = new THREE.Mesh(floorCeilingGeometry, galleryFloorCeilingMaterial); // Renamed
+    const gallery_ceiling = new THREE.Mesh(floorCeilingGeometry, galleryCeilingMaterial); // Use separate ceiling material
     gallery_ceiling.name = "gallery_ceiling";
     roomGroup.add(gallery_ceiling);
 
@@ -177,7 +221,11 @@ function updateDimensionsAndOffsets() {
 
     // Update Offsets
     currentOffsets = isMobile ? { ...mobileOffsets } : { ...desktopOffsets };
-    console.log(`View mode: ${isMobile ? 'Mobile' : 'Desktop'}, Initial Offsets:`, currentOffsets);
+    console.log(`View mode: ${isMobile ? 'Mobile' : 'Desktop'}, Initial Geometry Offsets:`, currentOffsets);
+
+    // ---> Update Active Texture Offsets <--- 
+    currentTextureOffsets = isMobile ? { ...mobileTextureOffsets } : { ...desktopTextureOffsets };
+    console.log(`Active Texture Offsets:`, currentTextureOffsets);
 
     // Update Camera (aspect is already calculated)
     camera.fov = isMobile ? 80 : 60;
@@ -318,53 +366,29 @@ function updateDimensionsAndOffsets() {
 }
 
 function handleKeyDown(event) {
-    let needsUpdate = false;
-    const step = 0.1;
+    // Keep geometry offset adjustments if still needed
+    let needsGeometryUpdate = false;
+    const geometryStep = 0.1; // Step for geometry adjustments
 
-    // Adjust floor offset
-    if (event.key === 'ArrowUp') {
-        currentOffsets.floor = +(currentOffsets.floor + step).toFixed(3);
-        needsUpdate = true;
-    } else if (event.key === 'ArrowDown') {
-        currentOffsets.floor = +(currentOffsets.floor - step).toFixed(3);
-        needsUpdate = true;
-    }
-    // Adjust ceiling offset
-    else if (event.key === 'ArrowRight') {
-        currentOffsets.ceiling = +(currentOffsets.ceiling + step).toFixed(3);
-        needsUpdate = true;
-    } else if (event.key === 'ArrowLeft') {
-        currentOffsets.ceiling = +(currentOffsets.ceiling - step).toFixed(3);
-        needsUpdate = true;
-    }
-    // Adjust wall offset
-    else if (event.key.toLowerCase() === 'w') {
-        currentOffsets.wall = +(currentOffsets.wall + step).toFixed(3);
-        needsUpdate = true;
-    } else if (event.key.toLowerCase() === 's' && !event.shiftKey) { // Avoid conflict with Shift+S
-        currentOffsets.wall = +(currentOffsets.wall - step).toFixed(3);
-        needsUpdate = true;
-    }
-    // Log current offsets
-    else if (event.key.toLowerCase() === 'l') {
-        console.log('Current Offsets:', currentOffsets);
-        const aspect = window.innerWidth / window.innerHeight;
-        console.log('Viewport aspect:', aspect, aspect < 1 ? '(mobile)' : '(desktop)');
-    }
-     // Save current offsets to console (mimicking saving preset)
-     else if (event.key === 'S' && event.shiftKey) {
+    // Example: Adjust geometry offsets (if you still need these)
+    // if (event.key === 'some_other_key') { ... needsGeometryUpdate = true; }
+
+    // Save current geometry/texture offsets to console (Shift+S)
+    if (event.key === 'S' && event.shiftKey) {
         const aspect = window.innerWidth / window.innerHeight;
         if (aspect < 1) {
-            console.log('Saving current offsets as mobile preset:', currentOffsets);
+            console.log('Current Geometry Offsets (Mobile Preset):', currentOffsets);
+            console.log('Current Fixed Texture Offsets (Mobile):', currentTextureOffsets); // Show current (mobile) set
         } else {
-            console.log('Saving current offsets as desktop preset:', currentOffsets);
+            console.log('Current Geometry Offsets (Desktop Preset):', currentOffsets);
+            console.log('Current Fixed Texture Offsets (Desktop):', currentTextureOffsets); // Show current (desktop) set
         }
      }
 
-    if (needsUpdate) {
-        console.log("Offsets adjusted:", currentOffsets);
-        // Re-apply positions/scales that depend on offsets
-        updateGeometryPositionsWithOffsets();
+    // Apply geometry updates if needed
+    if (needsGeometryUpdate) {
+        console.log("Geometry Offsets adjusted:", currentOffsets);
+        updateGeometryPositionsWithOffsets(); // Call if geometry keys are used
     }
 }
 
@@ -414,12 +438,16 @@ function updateGeometryPositionsWithOffsets(roomGroup, currentOffsets) {
  }
 
 function logInstructions() {
-    console.log('Offset Controls:');
-    console.log('- Up/Down Arrows: Adjust floor offset');
-    console.log('- Left/Right Arrows: Adjust ceiling offset');
-    console.log('- W/S Keys: Adjust wall offset');
-    console.log('- Press L to log current offset values');
-    console.log('- Press Shift+S to log values for current view mode preset');
+    console.log('Controls:');
+    // Add any remaining geometry controls here if applicable
+    console.log('--- Texture offsets are now hardcoded per display mode (desktop/mobile) ---');
+    console.log('- Press Shift+S to log current geometry offsets preset AND current fixed texture offsets');
+    // console.log('--- Fixed Texture Offset Controls (for Ribbon Effect) ---');
+    // console.log('- Up/Down Arrows: Adjust floor texture STARTING offset (usually 0)');
+    // console.log('- Left/Right Arrows: Adjust ceiling texture STARTING offset (floor_height + wall_height)');
+    // console.log('- W/S Keys: Adjust wall texture STARTING offset (floor_height)');
+    // console.log('- Press L to log current fixed texture offset values');
+    // console.log('----------------------------------------------------------');
 }
 
 function onWindowResize() {
@@ -430,13 +458,21 @@ function animate() {
     requestAnimationFrame(animate);
     
     const deltaTime = clock.getDelta(); // Get time since last frame
+    const scrollAmount = scrollSpeed * deltaTime;
 
-    // Animate texture scroll
-    if (galleryTexture) {
-        galleryTexture.offset.y -= scrollSpeed * deltaTime; // Scroll vertically
-        // galleryTexture.offset.x += scrollSpeed * deltaTime; // Uncomment for horizontal scroll
-        // Ensure offset stays within 0-1 range if needed, though RepeatWrapping handles it
-        // galleryTexture.offset.y %= 1;
+    // Update the base scroll offset (consistent for all)
+    // Add 1 before modulo to handle potential negative results correctly
+    baseScrollOffset = (baseScrollOffset - scrollAmount + 1) % 1; 
+
+    // Apply base scroll + fixed positional offset (from current active set) to each texture
+    if (floorTexture) {
+        floorTexture.offset.y = (baseScrollOffset + currentTextureOffsets.floor + 1) % 1;
+    }
+    if (wallTexture) {
+        wallTexture.offset.y = (baseScrollOffset + currentTextureOffsets.wall + 1) % 1;
+    }
+    if (ceilingTexture) {
+        ceilingTexture.offset.y = (baseScrollOffset + currentTextureOffsets.ceiling + 1) % 1;
     }
 
     controls.update(); // Only required if damping or auto-rotation is enabled
