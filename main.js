@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as TWEEN from '@tweenjs/tween.js';
 
-let scene, camera, renderer, controls;
+// --- Global Variables ---
+let scene, camera, renderer, controls, roomGroup;
+let pointLight, spotLight; 
+let gallery_wall, gallery_floor, gallery_ceiling; // Restore gallery globals
 let wallWidth, wallHeight, wallDistance, floorSize;
 let galleryTexture; // Original loaded texture
 let floorTexture, wallTexture, ceilingTexture; // Cloned textures for each section
@@ -23,6 +27,13 @@ let baseScrollOffset = 0; // Unified scroll position tracker
 // --- DOM Elements ---
 const container = document.getElementById('container');
 
+// --- Room Rotation Variables ---
+// Angles for roomGroup rotation to bring a wall to the front
+const targetAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2]; // Front, Right(Rotate Room Left), Back, Left(Rotate Room Right)
+let currentViewIndex = 0; // Start facing front (room rotation 0)
+const rotationDuration = 500; // ms for rotation animation
+const lightFadeDuration = 500; // ms for light fade animation
+
 // --- Core Functions ---
 function init() {
     // Scene
@@ -37,13 +48,20 @@ function init() {
     camera = new THREE.PerspectiveCamera(fov, aspect, near, 1000);
     camera.position.set(0, 0, cameraZ);
     scene.add(camera); // Add camera to scene so controls can target it
+    camera.lookAt(0, 0, 0); // Ensure camera looks at the origin initially
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-    const pointLight = new THREE.PointLight(0xffffff, 0.8, 100);
-    pointLight.position.set(10, 10, 10);
+    pointLight = new THREE.PointLight(0xffffff, 0.4, 10); // Uncommented, reduced intensity/distance slightly
+    pointLight.position.set(0, 0, 0); // Position slightly up and forward
     scene.add(pointLight);
+
+    spotLight = new THREE.SpotLight(0xffffff,15, 10); // Adjusted distance back to 10
+    spotLight.position.set(0, 0, 0.6); // Move slightly away from origin
+    scene.add(spotLight);
+    spotLight.penumbra = 0.3; // Add softness to the spotlight edge
+    // Point the spotlight towards the negative Z direction (where the gallery wall likely is)
+    spotLight.target.position.set(0, 0, -0.1); 
+    scene.add(spotLight.target); // Important: Add the target to the scene
 
     // Renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -53,13 +71,8 @@ function init() {
 
     // Controls
     controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableZoom = false;
-    controls.minPolarAngle = Math.PI / 2;
-    controls.maxPolarAngle = Math.PI / 2;
-    controls.minAzimuthAngle = -Math.PI / 2;
-    controls.maxAzimuthAngle = Math.PI / 2;
-    controls.rotateSpeed = 0.5;
-    controls.enablePan = false; // Usually good for fixed scenes
+    controls.enabled = false; // Disable OrbitControls interaction
+    // controls.target.set(0, 0, 0); // No longer strictly necessary if camera doesn't rotate, but doesn't hurt
 
     // Texture Loader
     const textureLoader = new THREE.TextureLoader();
@@ -119,11 +132,46 @@ function init() {
     // Initial calculation
     updateDimensionsAndOffsets();
     logInstructions();
+    // Set initial intensities directly without fade for the first load
+    if (currentViewIndex === 0) {
+        pointLight.intensity = 0;
+        spotLight.intensity = 15;
+    } else {
+        pointLight.intensity = 15;
+        spotLight.intensity = 0;
+    }
+
+    // Set initial material opacities directly without fade
+    const initialOpacity = (currentViewIndex === 0) ? 1 : 0;
+    // Need to wait for geometry creation, so do this check later or ensure creation order
+    // We'll rely on the fact that materials are created before this point in init
+    // A safer approach might involve setting flags or promises, but this should work
+    // Find the materials by name or reference if meshes aren't global yet
+    // Assuming createRoomGeometry() has run and assigned globals by this point
+    if (gallery_wall && gallery_wall.material) gallery_wall.material.opacity = initialOpacity;
+    if (gallery_floor && gallery_floor.material) gallery_floor.material.opacity = initialOpacity;
+    if (gallery_ceiling && gallery_ceiling.material) gallery_ceiling.material.opacity = initialOpacity;
+
+    // --- Add Arrow Button Listeners ---
+    const arrowLeft = document.getElementById('arrow-left');
+    const arrowRight = document.getElementById('arrow-right');
+
+    arrowLeft.addEventListener('click', () => {
+        currentViewIndex = (currentViewIndex - 1 + targetAngles.length) % targetAngles.length;
+        transitionLights(currentViewIndex); // Use new fade function
+        rotateRoom(targetAngles[currentViewIndex]); 
+    });
+
+    arrowRight.addEventListener('click', () => {
+        currentViewIndex = (currentViewIndex + 1) % targetAngles.length;
+        transitionLights(currentViewIndex); // Use new fade function
+        rotateRoom(targetAngles[currentViewIndex]); 
+    });
 }
 
 function createRoomGeometry() {
-    // Placeholder - will be filled by combining meshes
-    const roomGroup = new THREE.Group();
+    roomGroup = new THREE.Group(); // Initialize global roomGroup
+    roomGroup.name = "roomGroup";
     scene.add(roomGroup);
 
     // Geometry instances (reuse where possible)
@@ -173,15 +221,15 @@ function createRoomGeometry() {
     // Create Meshes (will be positioned/scaled in updateDimensionsAndOffsets)
     
     // --- Gallery Surfaces ---
-    const gallery_wall = new THREE.Mesh(wallGeometry, galleryWallMaterial); 
+    gallery_wall = new THREE.Mesh(wallGeometry, galleryWallMaterial); // Assign to global var 
     gallery_wall.name = "gallery_wall";
     roomGroup.add(gallery_wall);
 
-    const gallery_floor = new THREE.Mesh(floorCeilingGeometry, galleryFloorMaterial); // Use separate floor material
+    gallery_floor = new THREE.Mesh(floorCeilingGeometry, galleryFloorMaterial); // Assign to global var
     gallery_floor.name = "gallery_floor";
     roomGroup.add(gallery_floor);
 
-    const gallery_ceiling = new THREE.Mesh(floorCeilingGeometry, galleryCeilingMaterial); // Use separate ceiling material
+    gallery_ceiling = new THREE.Mesh(floorCeilingGeometry, galleryCeilingMaterial); // Assign to global var
     gallery_ceiling.name = "gallery_ceiling";
     roomGroup.add(gallery_ceiling);
 
@@ -479,8 +527,70 @@ function animate() {
         ceilingTexture.offset.y = (baseScrollOffset + currentTextureOffsets.ceiling + 1) % 1;
     }
 
-    controls.update(); // Only required if damping or auto-rotation is enabled
+    TWEEN.update(); // IMPORTANT: Update TWEEN animations
+
     renderer.render(scene, camera);
+}
+
+// --- Light Transition Function ---
+function transitionLights(viewIndex) {
+    // Check lights
+    if (!pointLight || !spotLight) return;
+    // Check gallery objects and their materials
+    if (!gallery_wall || !gallery_wall.material || 
+        !gallery_floor || !gallery_floor.material || 
+        !gallery_ceiling || !gallery_ceiling.material) return; 
+
+    const targetPointIntensity = (viewIndex === 0) ? 0 : 15; 
+    const targetSpotIntensity = (viewIndex === 0) ? 15 : 0;
+    const targetOpacity = (viewIndex === 0) ? 1 : 0; // Target opacity for gallery
+
+    // Tween for Point Light
+    new TWEEN.Tween(pointLight)
+        .to({ intensity: targetPointIntensity }, lightFadeDuration)
+        .easing(TWEEN.Easing.Quadratic.InOut)
+        .start();
+
+    // Tween Gallery Wall Opacity
+    new TWEEN.Tween(gallery_wall.material)
+        .to({ opacity: targetOpacity }, lightFadeDuration)
+        .easing(TWEEN.Easing.Quadratic.InOut)
+        .start();
+
+    // Tween Gallery Floor Opacity
+    new TWEEN.Tween(gallery_floor.material)
+        .to({ opacity: targetOpacity }, lightFadeDuration)
+        .easing(TWEEN.Easing.Quadratic.InOut)
+        .start();
+
+    // Tween Gallery Ceiling Opacity
+    new TWEEN.Tween(gallery_ceiling.material)
+        .to({ opacity: targetOpacity }, lightFadeDuration)
+        .easing(TWEEN.Easing.Quadratic.InOut)
+        .start();
+}
+
+// --- Room Rotation Function ---
+function rotateRoom(targetAngle) { 
+    if (!roomGroup) return; // Ensure roomGroup exists
+
+    const currentRotation = { y: roomGroup.rotation.y }; // Target roomGroup rotation
+    const targetRotation = { y: targetAngle };
+
+    // Adjust target angle to be the shortest path
+    // Handle wrap-around from PI to -PI etc.
+    const twoPi = Math.PI * 2;
+    while (targetRotation.y - currentRotation.y > Math.PI) targetRotation.y -= twoPi;
+    while (targetRotation.y - currentRotation.y < -Math.PI) targetRotation.y += twoPi;
+
+    new TWEEN.Tween(currentRotation)
+        .to(targetRotation, rotationDuration)
+        .easing(TWEEN.Easing.Quadratic.InOut)
+        .onUpdate(() => {
+            // camera.rotation.y = currentRotation.y; // Don't rotate camera
+            roomGroup.rotation.y = currentRotation.y; // Rotate roomGroup instead
+        })
+        .start();
 }
 
 // --- Start ---

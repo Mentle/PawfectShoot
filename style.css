@@ -8,4 +8,37 @@ body {
     width: 100vw;
     height: 100vh;
     display: block;
+    position: relative; /* Needed for absolute positioning of children */
+}
+
+/* Arrow Styles */
+.arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 50px;
+    height: 50px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    font-size: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    user-select: none; /* Prevent text selection */
+    z-index: 10; /* Ensure arrows are above the canvas */
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.arrow:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+#arrow-left {
+    left: 20px;
+}
+
+#arrow-right {
+    right: 20px;
 }

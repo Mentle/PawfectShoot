@@ -10,13 +10,19 @@
         {
             "imports": {
                 "three": "https://unpkg.com/three@0.163.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/"
+                "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/",
+                "@tweenjs/tween.js": "https://unpkg.com/@tweenjs/tween.js@23.1.1/dist/tween.esm.js" 
             }
         }
     </script>
 </head>
 <body>
-    <div id="container"></div>
+    <div id="container">
+        <!-- Add arrow buttons -->
+        <div id="arrow-left" class="arrow">&lt;</div>
+        <div id="arrow-right" class="arrow">&gt;</div>
+        <!-- Canvas will be added here by main.js -->
+    </div>
     <script type="module" src="main.js"></script>
 </body>
 </html>
