@@ -30,9 +30,11 @@ function init() {
 
     // Camera
     const aspect = window.innerWidth / window.innerHeight;
-    const fov = aspect < 1 ? 80 : 60;
+    // Increase FOV for a wider view only on mobile/portrait
+    const fov = aspect < 1 ? 90 : 60; // Changed from 90 : 75 (originally 80:60)
+    const near = 0.1;
     const cameraZ = aspect < 1 ? 1.8 : 2.5;
-    camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 1000);
+    camera = new THREE.PerspectiveCamera(fov, aspect, near, 1000);
     camera.position.set(0, 0, cameraZ);
     scene.add(camera); // Add camera to scene so controls can target it
 
@@ -228,7 +230,9 @@ function updateDimensionsAndOffsets() {
     console.log(`Active Texture Offsets:`, currentTextureOffsets);
 
     // Update Camera (aspect is already calculated)
-    camera.fov = isMobile ? 80 : 60;
+    camera.fov = isMobile ? 90 : 60; // Changed from 90 : 75 (originally 80:60)
+    camera.updateProjectionMatrix();
+
     const cameraZ = isMobile ? 1.8 : 2.5; // Bring camera closer in mobile
     const cameraY = isMobile ? 0.3 : 0; // Raise camera slightly in mobile view
     camera.position.set(0, cameraY, cameraZ);
