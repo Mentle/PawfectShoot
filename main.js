@@ -6,7 +6,7 @@ let wallWidth, wallHeight, wallDistance, floorSize;
 let galleryTexture; // Original loaded texture
 let floorTexture, wallTexture, ceilingTexture; // Cloned textures for each section
 const clock = new THREE.Clock(); // Clock for deltaTime
-const scrollSpeed = 0.02; // Adjust scroll speed as needed
+const scrollSpeed = 0.05; // Adjust scroll speed as needed
 
 // --- Geometry Offset Logic (Kept for potential future use or other adjustments) ---
 const mobileOffsets = { wall: 0, floor: 0, ceiling: 0 };
