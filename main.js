@@ -4,7 +4,7 @@ import * as TWEEN from '@tweenjs/tween.js';
 
 // --- Global Variables ---
 let scene, camera, renderer, controls, roomGroup;
-let pointLight, spotLight; 
+let roomLight, spotLight; 
 let gallery_wall, gallery_floor, gallery_ceiling; // Restore gallery globals
 let wallWidth, wallHeight, wallDistance, floorSize;
 let galleryTexture; // Original loaded texture
@@ -51,9 +51,8 @@ function init() {
     camera.lookAt(0, 0, 0); // Ensure camera looks at the origin initially
 
     // Lights
-    pointLight = new THREE.PointLight(0xffffff, 0.4, 10); // Uncommented, reduced intensity/distance slightly
-    pointLight.position.set(0, 0, 0); // Position slightly up and forward
-    scene.add(pointLight);
+    roomLight = new THREE.HemisphereLight(0xffffff, 0x808080, 1); // Sky, Ground, Intensity
+    scene.add(roomLight);
 
     spotLight = new THREE.SpotLight(0xffffff,15, 10); // Adjusted distance back to 10
     spotLight.position.set(0, 0, 0.6); // Move slightly away from origin
@@ -134,10 +133,10 @@ function init() {
     logInstructions();
     // Set initial intensities directly without fade for the first load
     if (currentViewIndex === 0) {
-        pointLight.intensity = 0;
+        roomLight.intensity = 0;
         spotLight.intensity = 15;
     } else {
-        pointLight.intensity = 15;
+        roomLight.intensity = 1; // Default intensity for HemisphereLight
         spotLight.intensity = 0;
     }
 
@@ -535,19 +534,19 @@ function animate() {
 // --- Light Transition Function ---
 function transitionLights(viewIndex) {
     // Check lights
-    if (!pointLight || !spotLight) return;
+    if (!roomLight || !spotLight) return;
     // Check gallery objects and their materials
     if (!gallery_wall || !gallery_wall.material || 
         !gallery_floor || !gallery_floor.material || 
         !gallery_ceiling || !gallery_ceiling.material) return; 
 
-    const targetPointIntensity = (viewIndex === 0) ? 0 : 15; 
+    const targetRoomLightIntensity = (viewIndex === 0) ? 0 : 1; // Target for HemisphereLight
     const targetSpotIntensity = (viewIndex === 0) ? 15 : 0;
     const targetOpacity = (viewIndex === 0) ? 1 : 0; // Target opacity for gallery
 
-    // Tween for Point Light
-    new TWEEN.Tween(pointLight)
-        .to({ intensity: targetPointIntensity }, lightFadeDuration)
+    // Tween for Room Light (Hemisphere)
+    new TWEEN.Tween(roomLight)
+        .to({ intensity: targetRoomLightIntensity }, lightFadeDuration)
         .easing(TWEEN.Easing.Quadratic.InOut)
         .start();
 
