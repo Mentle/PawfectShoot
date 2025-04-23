@@ -4,7 +4,7 @@ import * as TWEEN from '@tweenjs/tween.js';
 
 // --- Global Variables ---
 let scene, camera, renderer, controls, roomGroup;
-let roomLight, spotLight; 
+let ceilingLight, spotLight; 
 let gallery_wall, gallery_floor, gallery_ceiling; // Restore gallery globals
 let wallWidth, wallHeight, wallDistance, floorSize;
 let galleryTexture; // Original loaded texture
@@ -51,9 +51,14 @@ function init() {
     camera.lookAt(0, 0, 0); // Ensure camera looks at the origin initially
 
     // Lights
-    roomLight = new THREE.HemisphereLight(0xffffff, 0x808080, 1); // Sky, Ground, Intensity
-    scene.add(roomLight);
+    // Ceiling Light (replaces point light)
+    ceilingLight = new THREE.SpotLight(0xffffff, 30, 10, Math.PI / 3, 0.5, 2); // Intensity 30, Distance 10, Angle PI/3, Penumbra 0.5, Decay 2 (default)
+    ceilingLight.position.set(0, 4.1, 0); // Position LOWERED to be below ceiling (y=2 or y=3)
+    ceilingLight.target.position.set(0, 0, 0); // Point towards floor center
+    scene.add(ceilingLight);
+    scene.add(ceilingLight.target);
 
+    // Gallery Spotlight (existing)
     spotLight = new THREE.SpotLight(0xffffff,15, 10); // Adjusted distance back to 10
     spotLight.position.set(0, 0, 0.6); // Move slightly away from origin
     scene.add(spotLight);
@@ -133,10 +138,10 @@ function init() {
     logInstructions();
     // Set initial intensities directly without fade for the first load
     if (currentViewIndex === 0) {
-        roomLight.intensity = 0;
+        ceilingLight.intensity = 0; // Use ceilingLight
         spotLight.intensity = 15;
     } else {
-        roomLight.intensity = 1; // Default intensity for HemisphereLight
+        ceilingLight.intensity = 30; // Use ceilingLight and intensity 30
         spotLight.intensity = 0;
     }
 
@@ -417,29 +422,37 @@ function updateDimensionsAndOffsets() {
 }
 
 function handleKeyDown(event) {
-    // Keep geometry offset adjustments if still needed
-    let needsGeometryUpdate = false;
-    const geometryStep = 0.1; // Step for geometry adjustments
+    let targetAngle;
+    let nextViewIndex;
+    const previousViewIndex = currentViewIndex; // Store previous index
 
-    // Example: Adjust geometry offsets (if you still need these)
-    // if (event.key === 'some_other_key') { ... needsGeometryUpdate = true; }
+    switch (event.key) {
+        case 'ArrowLeft':
+            targetAngle = roomGroup.rotation.y + Math.PI / 2;
+            nextViewIndex = (currentViewIndex + 1) % 4;
+            break;
+        case 'ArrowRight':
+            targetAngle = roomGroup.rotation.y - Math.PI / 2;
+            nextViewIndex = (currentViewIndex - 1 + 4) % 4;
+            break;
+        default:
+            return; // Ignore other keys
+    }
 
-    // Save current geometry/texture offsets to console (Shift+S)
-    if (event.key === 'S' && event.shiftKey) {
-        const aspect = window.innerWidth / window.innerHeight;
-        if (aspect < 1) {
-            console.log('Current Geometry Offsets (Mobile Preset):', currentOffsets);
-            console.log('Current Fixed Texture Offsets (Mobile):', currentTextureOffsets); // Show current (mobile) set
+    if (nextViewIndex !== currentViewIndex) { // Only if index changes
+        console.log(`Transitioning from view ${previousViewIndex} to ${nextViewIndex}`);
+        const movingAwayFromGallery = (previousViewIndex === 0 && nextViewIndex !== 0);
+
+        if (movingAwayFromGallery) {
+            console.log("Moving away from gallery: Delayed transition sequence initiated.");
+            transitionLights(nextViewIndex, targetAngle); // Pass targetAngle for delayed rotation
+            // Rotation is handled *inside* transitionLights via callback
         } else {
-            console.log('Current Geometry Offsets (Desktop Preset):', currentOffsets);
-            console.log('Current Fixed Texture Offsets (Desktop):', currentTextureOffsets); // Show current (desktop) set
+            console.log("Moving towards gallery or between walls: Immediate transition.");
+            transitionLights(nextViewIndex); // Standard transition
+            rotateRoom(targetAngle);         // Start rotation immediately
         }
-     }
-
-    // Apply geometry updates if needed
-    if (needsGeometryUpdate) {
-        console.log("Geometry Offsets adjusted:", currentOffsets);
-        updateGeometryPositionsWithOffsets(); // Call if geometry keys are used
+        currentViewIndex = nextViewIndex; // Update view index AFTER initiating transitions
     }
 }
 
@@ -532,42 +545,70 @@ function animate() {
 }
 
 // --- Light Transition Function ---
-function transitionLights(viewIndex) {
+function transitionLights(viewIndex, targetAngle = null) { // Added optional targetAngle
     // Check lights
-    if (!roomLight || !spotLight) return;
+    if (!ceilingLight || !spotLight) {
+        console.error("Lights not initialized for transition!");
+        return;
+    }
     // Check gallery objects and their materials
-    if (!gallery_wall || !gallery_wall.material || 
-        !gallery_floor || !gallery_floor.material || 
-        !gallery_ceiling || !gallery_ceiling.material) return; 
+    if (!gallery_wall || !gallery_wall.material ||
+        !gallery_floor || !gallery_floor.material ||
+        !gallery_ceiling || !gallery_ceiling.material) {
+        console.error("Gallery elements not initialized for transition!");
+        return;
+    }
 
-    const targetRoomLightIntensity = (viewIndex === 0) ? 0 : 1; // Target for HemisphereLight
+    const targetCeilingIntensity = (viewIndex === 0) ? 0 : 30; // Use ceilingLight and intensity 30
     const targetSpotIntensity = (viewIndex === 0) ? 15 : 0;
     const targetOpacity = (viewIndex === 0) ? 1 : 0; // Target opacity for gallery
+    const movingAwayFromGallery = (targetSpotIntensity === 0 && targetAngle !== null); // Check if we're moving away AND received an angle
 
-    // Tween for Room Light (Hemisphere)
-    new TWEEN.Tween(roomLight)
-        .to({ intensity: targetRoomLightIntensity }, lightFadeDuration)
+    console.log(`Transitioning lights to view ${viewIndex}. Moving away: ${movingAwayFromGallery}`);
+    console.log(`Targets: Ceiling=${targetCeilingIntensity}, Spot=${targetSpotIntensity}, Opacity=${targetOpacity}`);
+
+    // --- Gallery Spot Light Tween --- (Always starts immediately)
+    new TWEEN.Tween(spotLight)
+        .to({ intensity: targetSpotIntensity }, lightFadeDuration)
         .easing(TWEEN.Easing.Quadratic.InOut)
         .start();
 
-    // Tween Gallery Wall Opacity
+    // --- Gallery Material Opacity Tweens --- (Always start immediately)
     new TWEEN.Tween(gallery_wall.material)
         .to({ opacity: targetOpacity }, lightFadeDuration)
         .easing(TWEEN.Easing.Quadratic.InOut)
         .start();
-
-    // Tween Gallery Floor Opacity
     new TWEEN.Tween(gallery_floor.material)
         .to({ opacity: targetOpacity }, lightFadeDuration)
         .easing(TWEEN.Easing.Quadratic.InOut)
         .start();
-
-    // Tween Gallery Ceiling Opacity
     new TWEEN.Tween(gallery_ceiling.material)
         .to({ opacity: targetOpacity }, lightFadeDuration)
         .easing(TWEEN.Easing.Quadratic.InOut)
         .start();
+
+    // --- Ceiling Light Tween --- (Conditional delay and callback)
+    const ceilingTween = new TWEEN.Tween(ceilingLight)
+        .to({ intensity: targetCeilingIntensity }, lightFadeDuration)
+        .easing(TWEEN.Easing.Quadratic.InOut);
+
+    if (movingAwayFromGallery) {
+        ceilingTween.delay(500); // 500ms delay before ceiling light starts fading IN
+        ceilingTween.onStart(() => {
+            console.log(`Ceiling light fade IN started (after 500ms delay). Queueing rotation to ${targetAngle} in 100ms.`);
+            setTimeout(() => {
+                 console.log(`Executing delayed rotation to angle: ${targetAngle}`);
+                 rotateRoom(targetAngle);
+            }, 100); // 100ms delay *after* light starts fading in
+        });
+    } else {
+       // No delay if moving towards gallery or between other walls
+       ceilingTween.delay(0);
+    }
+
+    ceilingTween.start();
 }
+
 
 // --- Room Rotation Function ---
 function rotateRoom(targetAngle) { 
