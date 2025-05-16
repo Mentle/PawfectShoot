@@ -18,6 +18,7 @@ const scrollSpeed = 0.05; // Adjust scroll speed as needed
 // Raycasting and Popup
 let raycaster, mouse;
 let deskModel; // To store the loaded desk model
+let corchModel; // To store the loaded corch model
 let tamagotchiPopup; // Renamed from modelPopup
 // let popupCloseButton; // This will now be handled by tamagotchi_game.js
 
@@ -152,6 +153,9 @@ function init() {
 
     // Load the PC desk model
     loadDeskModel();
+
+    // Load the Corch model
+    loadCorchModel();
 
     // Event Listeners
     window.addEventListener('resize', onWindowResize);
@@ -752,6 +756,48 @@ function loadDeskModel() {
     );
 }
 
+// --- GLTF Import Function for Corch ---
+function loadCorchModel() {
+    const loader = new GLTFLoader();
+    const modelPath = '3d Models/corch.glb'; // Path to the corch model
+
+    loader.load(
+        modelPath,
+        function (gltf) {
+            // Called when the resource is loaded
+            const loadedModel = gltf.scene; // gltf.scene is the THREE.Group
+            loadedModel.name = "corch"; // Important for identification
+            
+            corchModel = loadedModel; // Store globally
+
+            // Add the corch model to the roomGroup so it rotates with the room
+            if (roomGroup) {
+                roomGroup.add(corchModel);
+                console.log("Corch model loaded and added to roomGroup from:", modelPath);
+            } else {
+                console.error("roomGroup not initialized before loading corch model. Adding to scene instead.");
+                scene.add(corchModel); // Fallback if roomGroup isn't ready
+            }
+
+            // --- Example: Position and scale the corch model ---
+            // You might need to adjust these values based on the model's original size and pivot
+            // corchModel.position.set(1.5, -wallHeight / 2 + 0.5, -1); // Example: right side, on floor, slightly in front
+            // corchModel.scale.set(0.5, 0.5, 0.5); // Example: scale it down if it's too big
+            // corchModel.rotation.y = -Math.PI / 4; // Example: rotate it slightly
+
+        },
+        function (xhr) {
+            // Called while loading is progressing
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded of Corch model');
+        },
+        function (error) {
+            // Called when loading has errors
+            console.error('An error happened while loading the Corch model:', error);
+            console.error('Attempted to load from path:', modelPath);
+        }
+    );
+}
+
 // Click event handler for model interaction
 function onDocumentMouseClick(event) {
     event.preventDefault();
@@ -764,9 +810,9 @@ function onDocumentMouseClick(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
-    // --- MODIFICATION START: Check for right wall view --- 
+    // --- MODIFICATION START: Check for back wall view --- 
     // Only allow PC click if looking at the back wall (currentViewIndex === 2)
-    if (currentViewIndex !== 2 ) {
+    if (currentViewIndex !== 2) {
         // Optional: Log or provide feedback if click is attempted from wrong view
         // console.log("PC can only be interacted with from the back wall view.");
         return; // Exit if not the back view
