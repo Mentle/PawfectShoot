@@ -766,7 +766,7 @@ function onDocumentMouseClick(event) {
 
     // --- MODIFICATION START: Check for right wall view --- 
     // Only allow PC click if looking at the back wall (currentViewIndex === 2)
-    if (currentViewIndex !== 2) {
+    if (currentViewIndex !== 2 ) {
         // Optional: Log or provide feedback if click is attempted from wrong view
         // console.log("PC can only be interacted with from the back wall view.");
         return; // Exit if not the back view
