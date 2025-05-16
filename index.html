@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pawfect Room - Simplified</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="tamagotchi_style.css">
     <!-- Import Three.js -->
     <script type="importmap">
         {
@@ -24,5 +25,87 @@
         <!-- Canvas will be added here by main.js -->
     </div>
     <script type="module" src="main.js"></script>
+    <script type="module" src="tamagotchi_game.js"></script>
+
+    <!-- Updated Popup for Tamagotchi Game -->
+    <div id="tamagotchi-container"> 
+        <span class="popup-close-tamagotchi">&times;</span> 
+        <div class="tamagotchi-content">
+            <!-- Screen 1: Animal Selection -->
+            <div id="animal-selection-screen" class="screen">
+                <h2>Pick your animal:</h2>
+                <div class="animal-options">
+                    <button class="animal-btn" data-animal="dog"><img src="assets/dog_icon.png" alt="Dog">Dog</button>
+                    <button class="animal-btn" data-animal="cat"><img src="assets/cat_icon.png" alt="Cat">Cat</button>
+                    <button class="animal-btn" data-animal="rabbit"><img src="assets/rabbit_icon.png" alt="Rabbit">Rabbit</button>
+                    <button class="animal-btn" data-animal="bird"><img src="assets/bird_icon.png" alt="Bird">Bird</button>
+                    <button class="animal-btn" data-animal="fish"><img src="assets/fish_icon.png" alt="Fish">Fish</button>
+                    <button class="animal-btn" data-animal="other"><img src="assets/other_icon.png" alt="Other">Other</button>
+                </div>
+            </div>
+
+            <!-- Screen 2: Size Selection -->
+            <div id="size-selection-screen" class="screen">
+                <h2>Pick animal size:</h2>
+                <div class="size-options">
+                    <button class="size-btn" data-size="xs">XS</button>
+                    <button class="size-btn" data-size="s">S</button>
+                    <button class="size-btn" data-size="m">M</button>
+                    <button class="size-btn" data-size="l">L</button>
+                    <button class="size-btn" data-size="xl">XL</button>
+                </div>
+                <button class="back-btn" data-target-screen="animal-selection-screen">Back</button>
+            </div>
+
+            <!-- Screen 3: Name Input -->
+            <div id="name-input-screen" class="screen">
+                <h2>Give your animal a name:</h2>
+                <input type="text" id="animal-name-input" placeholder="Enter name">
+                <button id="submit-name-btn">Next</button>
+                <button class="back-btn" data-target-screen="size-selection-screen">Back</button>
+            </div>
+
+            <!-- Screen 4: Tamagotchi Main Scene -->
+            <div id="tamagotchi-main-screen" class="screen">
+                <h2 id="pet-name-display">[Pet Name]</h2>
+                <div id="pet-area">
+                    <img id="pet-image" src="" alt="Your Pet">
+                </div>
+                <p>Click to pet!</p>
+                <div>
+                    <button id="restart-tamagotchi-btn">Restart</button>
+                    <button id="book-session-btn">Book Session</button>
+                </div>
+            </div>
+
+            <!-- Screen 5: Booking Options -->
+            <div id="booking-options-screen" class="screen">
+                <h2>Choose Your Pawfect Package:</h2>
+                <div class="booking-package">
+                    <h3>PAWSIC</h3>
+                    <ul>
+                        <li>Consulta Previa Personalizada</li>
+                        <li>40 minutos de Sesión fotográfica</li>
+                        <li>Galería en línea para escoger tus fotos favoritas</li>
+                        <li>4 fotografías digitales editadas</li>
+                    </ul>
+                    <p class="price">150 EUR</p>
+                    <button class="select-package-btn" data-package="PAWSIC">Select PAWSIC</button>
+                </div>
+                <div class="booking-package">
+                    <h3>PAWFECT</h3>
+                    <ul>
+                        <li>Consulta previa personalizada</li>
+                        <li>1 hora de sesión fotográfica</li>
+                        <li>Galería en línea</li>
+                        <li>8 fotografías</li>
+                    </ul>
+                    <p class="price">250 EUR</p>
+                    <button class="select-package-btn" data-package="PAWFECT">Select PAWFECT</button>
+                </div>
+                <button class="back-btn" data-target-screen="tamagotchi-main-screen">Back</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

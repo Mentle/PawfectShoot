@@ -1,0 +1,203 @@
+/* tamagotchi_style.css */
+
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* Prevent scrollbars from main page when popup is active */
+}
+
+#tamagotchi-container {
+    position: fixed; /* Changed from 'absolute' */
+    top: 0;
+    left: 0;
+    width: 100vw; /* Use viewport units for full screen */
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.9); /* Darker overlay for focus */
+    display: none; /* Initially hidden */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* Ensure it's on top */
+    color: white; /* Basic text color for now */
+    font-family: 'PixelatedFont', monospace; /* Placeholder for Tamagotchi font */
+    padding: 20px; /* Add some padding */
+    box-sizing: border-box; /* Include padding in width/height */
+}
+
+.tamagotchi-content {
+    background-color: #f0f0f0; /* Light grey, Tamagotchi-like screen background */
+    border: 10px solid #333; /* Dark border, classic Tamagotchi look */
+    border-radius: 20px; /* Rounded corners */
+    padding: 20px;
+    width: 90%;
+    max-width: 500px; /* Max width for the game area */
+    height: 80%;
+    max-height: 700px; /* Max height */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-around; /* Distribute space for elements */
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    color: #333; /* Text color inside the game screen */
+}
+
+.tamagotchi-content h2 {
+    margin-top: 0;
+    font-size: 1.8em;
+}
+
+.tamagotchi-content button {
+    background-color: #555;
+    color: white;
+    border: 2px solid #333;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1em;
+    margin: 5px;
+}
+
+.tamagotchi-content button:hover {
+    background-color: #777;
+}
+
+.popup-close-tamagotchi {
+    position: absolute;
+    top: 25px; /* Adjust to be inside the new padding of tamagotchi-container */
+    right: 25px;
+    font-size: 30px;
+    color: #ccc; /* Lighter color for close button against dark background */
+    cursor: pointer;
+    z-index: 1001; /* Above tamagotchi-content */
+}
+
+.popup-close-tamagotchi:hover {
+    color: white;
+}
+
+/* Placeholder for screens */
+.screen {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+/* Specific screen styles will go here */
+#animal-selection-screen,
+#size-selection-screen,
+#name-input-screen,
+#tamagotchi-main-screen,
+#booking-options-screen {
+    display: none; /* Hidden by default, shown by JS */
+}
+
+/* Styling for select dropdowns and inputs if needed */
+select, input[type="text"] {
+    padding: 8px;
+    margin: 10px 0;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    width: 80%;
+    max-width: 300px;
+    font-size: 1em;
+}
+
+.animal-options button img {
+    width: 50px; /* Adjust as needed */
+    height: 50px;
+    margin-bottom: 5px;
+}
+
+.animal-options button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: none;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+}
+
+.animal-options {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+.size-options button {
+    min-width: 60px;
+}
+
+.size-options {
+ display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+#pet-area {
+    width: 150px;
+    height: 150px;
+    border: 2px dashed #aaa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 20px auto;
+    cursor: pointer; /* Indicate it's clickable */
+    background-color: #e0e0e0;
+}
+
+#pet-image {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.heart {
+    position: absolute;
+    font-size: 20px;
+    color: red;
+    animation: floatUp 1s ease-out forwards;
+}
+
+@keyframes floatUp {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-50px); opacity: 0; }
+}
+
+.booking-package {
+    border: 1px solid #ccc;
+    padding: 15px;
+    margin: 10px;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    width: 90%;
+    max-width: 350px;
+}
+
+.booking-package h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+.booking-package ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.booking-package ul li {
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.booking-package .price {
+    font-weight: bold;
+    font-size: 1.2em;
+    color: #e67e22; /* Orange color for price */
+    margin-top: 10px;
+}

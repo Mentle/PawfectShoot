@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as TWEEN from '@tweenjs/tween.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { initTamagotchiGame } from './tamagotchi_game.js'; // Import the init function
 
 // --- Global Variables ---
 let scene, camera, renderer, controls, roomGroup;
@@ -11,6 +14,12 @@ let galleryTexture; // Original loaded texture
 let floorTexture, wallTexture, ceilingTexture; // Cloned textures for each section
 const clock = new THREE.Clock(); // Clock for deltaTime
 const scrollSpeed = 0.05; // Adjust scroll speed as needed
+
+// Raycasting and Popup
+let raycaster, mouse;
+let deskModel; // To store the loaded desk model
+let tamagotchiPopup; // Renamed from modelPopup
+// let popupCloseButton; // This will now be handled by tamagotchi_game.js
 
 // --- Geometry Offset Logic (Kept for potential future use or other adjustments) ---
 const mobileOffsets = { wall: 0, floor: 0, ceiling: 0 };
@@ -39,6 +48,14 @@ function init() {
     // Scene
     scene = new THREE.Scene();
 
+    // Get the Tamagotchi popup container
+    tamagotchiPopup = document.getElementById('tamagotchi-container');
+    // The close button inside the tamagotchi popup is handled by tamagotchi_game.js
+
+    // Raycaster and mouse for picking
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
     // Camera
     const aspect = window.innerWidth / window.innerHeight;
     // Increase FOV for a wider view only on mobile/portrait
@@ -51,9 +68,13 @@ function init() {
     camera.lookAt(0, 0, 0); // Ensure camera looks at the origin initially
 
     // Lights
+    // Ambient Light (for overall scene illumination)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.1); // White light, 0. intensity
+    scene.add(ambientLight);
+
     // Ceiling Light (replaces point light)
-    ceilingLight = new THREE.SpotLight(0xffffff, 30, 10, Math.PI / 3, 0.5, 2); // Intensity 30, Distance 10, Angle PI/3, Penumbra 0.5, Decay 2 (default)
-    ceilingLight.position.set(0, 4.1, 0); // Position LOWERED to be below ceiling (y=2 or y=3)
+    ceilingLight = new THREE.SpotLight(0xffffff, 30, 10, Math.PI / 2, 0.5, 2); // Intensity 30, Distance 10, Angle PI/2, Penumbra 0.5, Decay 2 (default)
+    ceilingLight.position.set(0, 3, 0); // Position LOWERED to be below ceiling (y=2 or y=3)
     ceilingLight.target.position.set(0, 0, 0); // Point towards floor center
     scene.add(ceilingLight);
     scene.add(ceilingLight.target);
@@ -129,9 +150,15 @@ function init() {
     // Geometry (Walls, Floor, Ceiling)
     createRoomGeometry();
 
+    // Load the PC desk model
+    loadDeskModel();
+
     // Event Listeners
     window.addEventListener('resize', onWindowResize);
     window.addEventListener('keydown', handleKeyDown);
+
+    // Add event listener for mouse click
+    renderer.domElement.addEventListener('click', onDocumentMouseClick);
 
     // Initial calculation
     updateDimensionsAndOffsets();
@@ -422,37 +449,43 @@ function updateDimensionsAndOffsets() {
 }
 
 function handleKeyDown(event) {
-    let targetAngle;
-    let nextViewIndex;
-    const previousViewIndex = currentViewIndex; // Store previous index
+    let targetAngle = roomGroup.rotation.y; // Default to current angle
+    let newViewIndex = currentViewIndex;    // Initialize with current view index
+    let performRotation = false;
 
     switch (event.key) {
-        case 'ArrowLeft':
-            targetAngle = roomGroup.rotation.y + Math.PI / 2;
-            nextViewIndex = (currentViewIndex + 1) % 4;
+        case 'ArrowLeft': // View wall to the left (room rotates right)
+            newViewIndex = (currentViewIndex + 1) % targetAngles.length;
+            targetAngle = targetAngles[newViewIndex];
+            performRotation = true;
             break;
-        case 'ArrowRight':
-            targetAngle = roomGroup.rotation.y - Math.PI / 2;
-            nextViewIndex = (currentViewIndex - 1 + 4) % 4;
+        case 'ArrowRight': // View wall to the right (room rotates left)
+            newViewIndex = (currentViewIndex - 1 + targetAngles.length) % targetAngles.length;
+            targetAngle = targetAngles[newViewIndex];
+            performRotation = true;
             break;
+        case 'p': // Export scene
+        case 'P': // Export scene (case insensitive)
+            exportRoomToGLTF();
+            return; // Exit early, no rotation intended
         default:
             return; // Ignore other keys
     }
 
-    if (nextViewIndex !== currentViewIndex) { // Only if index changes
-        console.log(`Transitioning from view ${previousViewIndex} to ${nextViewIndex}`);
-        const movingAwayFromGallery = (previousViewIndex === 0 && nextViewIndex !== 0);
-
-        if (movingAwayFromGallery) {
-            console.log("Moving away from gallery: Delayed transition sequence initiated.");
-            transitionLights(nextViewIndex, targetAngle); // Pass targetAngle for delayed rotation
-            // Rotation is handled *inside* transitionLights via callback
-        } else {
-            console.log("Moving towards gallery or between walls: Immediate transition.");
-            transitionLights(nextViewIndex); // Standard transition
-            rotateRoom(targetAngle);         // Start rotation immediately
+    // Proceed with rotation only if a valid key was pressed and view index changes
+    if (performRotation && newViewIndex !== currentViewIndex) {
+        // If moving away from gallery (viewIndex 0) to another wall
+        if (currentViewIndex === 0 && newViewIndex !== 0) {
+            console.log(`Moving away from gallery. Current: ${currentViewIndex}, New: ${newViewIndex}, Target Angle: ${targetAngle}`);
+            transitionLights(newViewIndex, targetAngle); // Pass targetAngle for delayed rotation
+        } 
+        // If moving towards gallery OR between non-gallery walls
+        else {
+            console.log(`Moving to gallery or between walls. Current: ${currentViewIndex}, New: ${newViewIndex}, Target Angle: ${targetAngle}`);
+            rotateRoom(targetAngle); // Rotate room immediately
+            transitionLights(newViewIndex); // Transition lights without delay
         }
-        currentViewIndex = nextViewIndex; // Update view index AFTER initiating transitions
+        currentViewIndex = newViewIndex; // Update the current view index
     }
 }
 
@@ -609,28 +642,158 @@ function transitionLights(viewIndex, targetAngle = null) { // Added optional tar
     ceilingTween.start();
 }
 
-
 // --- Room Rotation Function ---
 function rotateRoom(targetAngle) { 
     if (!roomGroup) return; // Ensure roomGroup exists
 
-    const currentRotation = { y: roomGroup.rotation.y }; // Target roomGroup rotation
+    // Initialize userData if it doesn't exist
+    if (!roomGroup.userData) {
+        roomGroup.userData = {};
+    }
+
+    // Stop any ongoing rotation tweens for the roomGroup to prevent conflicts
+    if (roomGroup.userData.activeTween) {
+        roomGroup.userData.activeTween.stop();
+        // TWEEN.remove(roomGroup.userData.activeTween); // Alternative to stop, depends on TWEEN version/preference
+        delete roomGroup.userData.activeTween;
+    }
+
+    const currentRotation = { y: roomGroup.rotation.y };
     const targetRotation = { y: targetAngle };
 
     // Adjust target angle to be the shortest path
-    // Handle wrap-around from PI to -PI etc.
     const twoPi = Math.PI * 2;
     while (targetRotation.y - currentRotation.y > Math.PI) targetRotation.y -= twoPi;
     while (targetRotation.y - currentRotation.y < -Math.PI) targetRotation.y += twoPi;
 
-    new TWEEN.Tween(currentRotation)
+    const tween = new TWEEN.Tween(currentRotation)
         .to(targetRotation, rotationDuration)
         .easing(TWEEN.Easing.Quadratic.InOut)
         .onUpdate(() => {
-            // camera.rotation.y = currentRotation.y; // Don't rotate camera
-            roomGroup.rotation.y = currentRotation.y; // Rotate roomGroup instead
+            roomGroup.rotation.y = currentRotation.y;
+        })
+        .onComplete(() => {
+            // Clear the active tween reference upon completion
+            if (roomGroup.userData && roomGroup.userData.activeTween === tween) {
+                delete roomGroup.userData.activeTween;
+            }
+        })
+        .onStop(() => {
+            // Also clear if stopped (e.g., by starting a new one before completion)
+            if (roomGroup.userData && roomGroup.userData.activeTween === tween) {
+                delete roomGroup.userData.activeTween;
+            }
         })
         .start();
+    
+    roomGroup.userData.activeTween = tween; // Store the reference to the new active tween
+}
+
+// --- GLTF Export Function ---
+function exportRoomToGLTF() {
+    if (!roomGroup) {
+        console.error("Room group not found for export.");
+        return;
+    }
+
+    const exporter = new GLTFExporter();
+    const options = {
+        binary: true, // Export as .glb
+        trs: true, // Include translation, rotation, scale
+        onlyVisible: true, // Export only visible objects
+        embedImages: true // Embed textures if possible
+    };
+
+    exporter.parse(
+        roomGroup, // The object to export
+        function (gltf) {
+            // gltf is ArrayBuffer if binary is true
+            const blob = new Blob([gltf], { type: 'application/octet-stream' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'room.glb';
+            link.click();
+            URL.revokeObjectURL(link.href); // Clean up
+            console.log("Room exported as room.glb");
+        },
+        function (error) {
+            console.error('An error happened during GLTF export:', error);
+        },
+        options
+    );
+}
+
+// --- GLTF Import Function for Desk ---
+function loadDeskModel() {
+    const loader = new GLTFLoader();
+    const modelPath = '3d Models/pc.glb'; // Assuming this path
+
+    loader.load(
+        modelPath,
+        function (gltf) {
+            // Called when the resource is loaded
+            const loadedModel = gltf.scene; // gltf.scene is the THREE.Group
+            loadedModel.name = "pc_desk"; // Important for identification
+            
+            deskModel = loadedModel; // Store globally for raycasting
+
+            roomGroup.add(deskModel); // Changed from scene.add(deskModel)            
+            console.log("PC Desk model loaded and added to roomGroup from:", modelPath);
+        },
+        function (xhr) {
+            // Called while loading is progressing
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded of PC Desk');
+        },
+        function (error) {
+            // Called when loading has errors
+            console.error('An error happened while loading the PC Desk model:', error);
+            console.error('Attempted to load from path:', modelPath);
+        }
+    );
+}
+
+// Click event handler for model interaction
+function onDocumentMouseClick(event) {
+    event.preventDefault();
+
+    // Calculate mouse position in normalized device coordinates (-1 to +1) for both components
+    // Using renderer.domElement.getBoundingClientRect() for more robust coordinate calculation
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    // --- MODIFICATION START: Check for right wall view --- 
+    // Only allow PC click if looking at the back wall (currentViewIndex === 2)
+    if (currentViewIndex !== 2) {
+        // Optional: Log or provide feedback if click is attempted from wrong view
+        // console.log("PC can only be interacted with from the back wall view.");
+        return; // Exit if not the back view
+    }
+    // --- MODIFICATION END ---
+
+    if (!deskModel) {
+        console.log("Desk model not loaded yet or not assigned to deskModel variable.");
+        return;
+    }
+
+    // Check for intersections with the desk model specifically
+    // The 'true' argument means it will check recursively (all descendants)
+    const intersects = raycaster.intersectObject(deskModel, true); 
+
+    if (intersects.length > 0) {
+        // The first intersected object (intersects[0].object) is part of the deskModel
+        // because we specifically intersected with deskModel and its children.
+        console.log("PC Desk (or part of it) clicked!", intersects[0].object);
+        
+        if (tamagotchiPopup) {
+            tamagotchiPopup.style.display = 'flex'; // Show the popup
+            initTamagotchiGame(); // Initialize or re-initialize the game
+        } else {
+            console.error("tamagotchiPopup element not found.");
+        }
+    }
 }
 
 // --- Start ---
