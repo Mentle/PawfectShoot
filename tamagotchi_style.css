@@ -1,5 +1,13 @@
 /* tamagotchi_style.css */
 
+@font-face {
+    font-family: 'PixelatedFont'; /* You can name this whatever you like */
+    /* Make sure to create assets/fonts and place your font file there */
+    /* src: url('assets/fonts/YourPixelFont.ttf') format('truetype'); */
+    /* Example using a common pixel font name, replace with your actual file */
+    src: url('assets/fonts/PressStart2P-Regular.ttf') format('truetype'); 
+}
+
 body, html {
     margin: 0;
     padding: 0;
@@ -26,41 +34,54 @@ body, html {
 }
 
 .tamagotchi-content {
-    background-color: #f0f0f0; /* Light grey, Tamagotchi-like screen background */
-    border: 10px solid #333; /* Dark border, classic Tamagotchi look */
-    border-radius: 20px; /* Rounded corners */
+    background-color: #cadfab; /* Pale greenish-grey LCD screen color */
+    border: 10px solid #4a4a4a; /* Dark grey, slightly softer than pure black for the 'shell' */
+    border-radius: 25px; /* More rounded corners for the device body */
     padding: 20px;
     width: 90%;
-    max-width: 500px; /* Max width for the game area */
-    height: 80%;
-    max-height: 700px; /* Max height */
+    max-width: 480px; /* Adjusted max-width */
+    height: 85%;
+    max-height: 650px; /* Adjusted max-height */
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-around; /* Distribute space for elements */
-    box-shadow: 0 0 15px rgba(0,0,0,0.5);
-    color: #333; /* Text color inside the game screen */
+    justify-content: space-between; /* Adjust to space-between for better content distribution */
+    box-shadow: 5px 5px 10px rgba(0,0,0,0.3), inset 3px 3px 5px rgba(0,0,0,0.2); /* More pronounced shadow + inset */
+    color: #3b3b3b; /* Darker text color for LCD 'pixels' */
+    font-size: 0.9em; /* Slightly smaller base font for pixel look, adjust as needed */
 }
 
 .tamagotchi-content h2 {
     margin-top: 0;
-    font-size: 1.8em;
+    margin-bottom: 15px; /* Add some space below headings */
+    font-size: 1.5em; /* Adjust heading size relative to new base */
+    text-transform: uppercase; /* Common for old game UIs */
+    letter-spacing: 1px; /* Slight letter spacing */
 }
 
 .tamagotchi-content button {
-    background-color: #555;
-    color: white;
-    border: 2px solid #333;
-    padding: 10px 15px;
-    border-radius: 8px;
+    background-color: #585858; /* Dark grey button color */
+    color: #e0e0e0; /* Light grey text on buttons */
+    border: 2px solid #3a3a3a; /* Slightly darker border for buttons */
+    padding: 8px 12px; /* Adjust padding for a chunkier feel */
+    border-radius: 5px; /* Less rounded for a more 'classic button' look */
     cursor: pointer;
-    font-family: inherit;
-    font-size: 1em;
+    font-family: inherit; /* Inherits PixelatedFont */
+    font-size: 0.9em; /* Button text size */
     margin: 5px;
+    text-transform: uppercase;
+    box-shadow: 2px 2px 3px rgba(0,0,0,0.4);
 }
 
 .tamagotchi-content button:hover {
-    background-color: #777;
+    background-color: #686868; /* Slightly lighter on hover */
+    color: #ffffff;
+}
+
+.tamagotchi-content button:active {
+    background-color: #484848;
+    box-shadow: inset 1px 1px 2px rgba(0,0,0,0.5);
+    transform: translateY(1px);
 }
 
 .popup-close-tamagotchi {
@@ -86,15 +107,234 @@ body, html {
     align-items: center;
     justify-content: center;
     text-align: center;
+    padding: 15px;
+    box-sizing: border-box;
+    text-align: center;
+    /* Add flex properties to distribute content within each screen */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* This will push nav buttons to bottom if content is short */
+    align-items: center;
 }
 
-/* Specific screen styles will go here */
-#animal-selection-screen,
-#size-selection-screen,
-#name-input-screen,
-#tamagotchi-main-screen,
-#booking-options-screen {
-    display: none; /* Hidden by default, shown by JS */
+#size-selection-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center children horizontally */
+    justify-content: flex-start; /* Align items to the top initially */
+    width: 100%;
+    height: 100%;
+    padding: 20px 10px; /* Reduced horizontal padding */
+    box-sizing: border-box;
+}
+
+.size-options-visual {
+    display: flex;
+    flex-direction: column; /* Stack items vertically */
+    align-items: center; /* Center items horizontally in the column */
+    justify-content: center; /* Center items vertically if less space, or use space-around */
+    width: 100%;
+    max-width: 250px; /* Max width for the vertical stack itself */
+    margin-top: 10px;
+    margin-bottom: 10px;
+    gap: 10px; /* Vertical gap between options */
+    flex-grow: 1;
+    padding: 10px 0;
+}
+
+.size-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    cursor: pointer;
+    padding: 10px; /* Uniform padding */
+    border: 2px solid #777;
+    border-radius: 10px;
+    background-color: rgba(255,255,255,0.05);
+    transition: border-color 0.2s ease-in-out, background-color 0.2s ease-in-out, transform 0.2s ease;
+    width: 80%; /* Width of each option within the vertical stack */
+    min-width: 120px; /* Minimum width for each option */
+}
+
+.size-option p {
+    word-break: break-word; /* Help if text is an issue, though unlikely for S/M/L */
+    font-size: 0.8em;
+    margin-top: 3px; /* Add a little space between image and text */
+}
+
+.size-option:hover {
+    background-color: rgba(255,255,255,0.15);
+    border-color: #aaa;
+    transform: translateY(-2px); /* Slight lift on hover */
+}
+
+.size-option img {
+    object-fit: contain;
+    margin-bottom: 5px;
+    max-width: 100%; /* Ensure image does not overflow its container */
+}
+
+/* Define heights for the images to represent sizes - make differences more noticeable */
+#size-img-small { height: 30px; }
+#size-img-medium { height: 55px; }
+#size-img-large { height: 80px; }
+
+.size-option.selected {
+    border-color: #f0f0f0; /* Brighter border for selected on darkish LCD */
+    background-color: rgba(255,255,255,0.2); /* More distinct selected background */
+    box-shadow: 0 0 8px rgba(255,255,255,0.4);
+    transform: translateY(-1px); /* Keep consistent or slightly lift selected */
+}
+
+.navigation-buttons {
+    display: flex;
+    justify-content: space-between; /* This should place Back left, Next right */
+    align-items: center;
+    width: 100%;
+    max-width: 250px; /* Match width of options above */
+    margin-top: auto; /* Pushes this to the bottom of the flex container */
+    padding-top: 10px; /* Space above the buttons */
+    flex-shrink: 0;
+}
+
+.navigation-buttons .tamagotchi-btn {
+    margin: 0; /* Override general button margin from .tamagotchi-content button */
+    /* Adjust padding if needed for a better size, or set a flex-basis */
+    padding: 10px 15px; 
+    font-size: 0.85em; /* Slightly smaller font for nav buttons */
+}
+
+.tamagotchi-screen {
+    width: 100%;
+    height: 100%;
+    padding: 15px; 
+    box-sizing: border-box;
+    text-align: center;
+}
+
+#tamagotchi-main-screen, #booking-options-screen {
+    display: none; /* Default hidden state */
+}
+
+#pet-area {
+    position: relative; /* For positioning feedback icon */
+    margin-bottom: 15px;
+    display: flex; /* Helps center image if it's smaller than area */
+    justify-content: center;
+    align-items: center;
+    /* min-height: 100px; /* Ensure some space for the pet image */
+}
+
+#pet-image {
+    max-width: 120px; /* Control max size of pet */
+    max-height: 120px;
+    object-fit: contain;
+}
+
+.feedback-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 2.5em; /* For emoji feedback like a heart */
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    pointer-events: none; /* So it doesn't interfere with clicks on pet image if any */
+}
+
+#interaction-button-group {
+    display: flex;
+    justify-content: center; /* Center buttons horizontally */
+    gap: 10px; /* Space between Feed, Play, Pet buttons */
+    margin-bottom: 15px; /* Space before navigation buttons */
+    flex-wrap: wrap; /* Allow buttons to wrap if screen is too narrow */
+}
+
+.interaction-btn {
+    display: flex;
+    flex-direction: column; /* Stack icon and text */
+    align-items: center;
+    padding: 8px 12px;
+    min-width: 70px; /* Min width for interaction buttons */
+    font-size: 0.8em;
+}
+
+.interaction-btn img {
+    width: 24px; /* Size of icons in buttons */
+    height: 24px;
+    margin-bottom: 4px;
+    object-fit: contain;
+}
+
+/* Screen specific layouts */
+#animal-selection-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-evenly; /* To space out title and options */
+    width: 100%;
+    height: 100%;
+    padding: 20px 10px;
+    box-sizing: border-box;
+}
+
+.animal-options {
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap to next line */
+    justify-content: center; /* Center buttons horizontally */
+    gap: 15px; /* Gap between animal buttons */
+    margin-top: 20px; /* Space above the animal buttons */
+}
+
+.animal-options .animal-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px; /* Min width for each animal button */
+    padding: 10px;
+}
+
+.animal-options .animal-btn img {
+    width: 50px; /* Size of animal images in buttons */
+    height: 50px;
+    margin-bottom: 5px;
+}
+
+#name-input-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center children horizontally */
+    justify-content: flex-start; /* Align items to the top initially */
+    width: 100%;
+    height: 100%;
+    padding: 20px 10px;
+    box-sizing: border-box;
+}
+
+.name-input-content-area {
+    flex-grow: 1; /* Allow this area to take up available vertical space */
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Center H2 and Input vertically */
+    align-items: center; /* Center H2 and Input horizontally */
+    width: 100%; /* Take full width of its parent */
+}
+
+#name-input-screen h2 {
+    margin-bottom: 20px;
+}
+
+#name-input-screen input[type="text"] {
+    width: 80%;
+    max-width: 300px;
+    padding: 12px;
+    margin-bottom: 20px; /* Space between input and nav buttons */
+    border: 2px solid #777;
+    border-radius: 8px;
+    background-color: rgba(255,255,255,0.1);
+    color: #333;
+    text-align: center;
 }
 
 /* Styling for select dropdowns and inputs if needed */
@@ -102,10 +342,13 @@ select, input[type="text"] {
     padding: 8px;
     margin: 10px 0;
     border-radius: 5px;
-    border: 1px solid #ccc;
+    border: 1px solid #777; /* Darker border for inputs */
+    background-color: #ddeedd; /* Slightly lighter green for input fields */
+    color: #333;
     width: 80%;
     max-width: 300px;
     font-size: 1em;
+    font-family: inherit;
 }
 
 .animal-options button img {
@@ -118,71 +361,35 @@ select, input[type="text"] {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: none;
-    border: 1px solid #ccc;
+    background-color: #b8c8b4; /* Lighter green for selection items */
+    border: 2px solid #585858;
     box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+    color: #333;
+    padding: 10px;
 }
 
-.animal-options {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-}
-
-.size-options button {
-    min-width: 60px;
-}
-
-.size-options {
- display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-}
-
-#pet-area {
-    width: 150px;
-    height: 150px;
-    border: 2px dashed #aaa;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 20px auto;
-    cursor: pointer; /* Indicate it's clickable */
-    background-color: #e0e0e0;
-}
-
-#pet-image {
-    max-width: 100%;
-    max-height: 100%;
-}
-
-.heart {
-    position: absolute;
-    font-size: 20px;
-    color: red;
-    animation: floatUp 1s ease-out forwards;
-}
-
-@keyframes floatUp {
-    0% { transform: translateY(0); opacity: 1; }
-    100% { transform: translateY(-50px); opacity: 0; }
+.animal-options button.selected {
+    background-color: #d8e8d4; 
+    border-color: #333;
+    box-shadow: inset 1px 1px 3px rgba(0,0,0,0.3);
 }
 
 .booking-package {
-    border: 1px solid #ccc;
+    border: 1px solid #777;
     padding: 15px;
     margin: 10px;
     border-radius: 8px;
-    background-color: #f9f9f9;
+    background-color: #ddeedd; /* Lighter green like inputs */
     width: 90%;
     max-width: 350px;
+    font-size: 0.85em; /* Slightly smaller text in booking packages */
 }
 
 .booking-package h3 {
     margin-top: 0;
-    color: #333;
+    color: #3b3b3b;
+    text-transform: uppercase;
+    font-size: 1.2em;
 }
 
 .booking-package ul {
@@ -197,7 +404,186 @@ select, input[type="text"] {
 
 .booking-package .price {
     font-weight: bold;
-    font-size: 1.2em;
-    color: #e67e22; /* Orange color for price */
+    font-size: 1.3em;
+    color: #c94a46; /* Accent red for price */
     margin-top: 10px;
+}
+
+/* Main Tamagotchi Screen Layout */
+#tamagotchi-main-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between; /* Pushes nav buttons to bottom, centers rest if space allows */
+    width: 100%;
+    height: 100%;
+    padding: 20px 10px;
+    box-sizing: border-box;
+}
+
+#pet-area {
+    position: relative; /* For positioning feedback icon */
+    margin-bottom: 15px;
+    display: flex; /* Helps center image if it's smaller than area */
+    justify-content: center;
+    align-items: center;
+    /* min-height: 100px; /* Ensure some space for the pet image */
+}
+
+#pet-image {
+    max-width: 120px; /* Control max size of pet */
+    max-height: 120px;
+    object-fit: contain;
+}
+
+#pet-feedback-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 2.5em; /* For emoji feedback like a heart */
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    pointer-events: none; /* So it doesn't interfere with clicks on pet image if any */
+}
+
+#interaction-button-group {
+    display: flex;
+    justify-content: center; /* Center buttons horizontally */
+    gap: 10px; /* Space between Feed, Play, Pet buttons */
+    margin-bottom: 15px; /* Space before navigation buttons */
+    flex-wrap: wrap; /* Allow buttons to wrap if screen is too narrow */
+}
+
+.interaction-btn {
+    display: flex;
+    flex-direction: column; /* Stack icon and text */
+    align-items: center;
+    padding: 8px 12px;
+    min-width: 70px; /* Min width for interaction buttons */
+    font-size: 0.8em;
+}
+
+.interaction-btn img {
+    width: 24px; /* Size of icons in buttons */
+    height: 24px;
+    margin-bottom: 4px;
+    object-fit: contain;
+}
+
+/* Pet animation classes */
+@keyframes petPlayAnimation {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-5px) rotate(-5deg); }
+    50% { transform: translateY(0) rotate(5deg); }
+    75% { transform: translateY(-3px) rotate(0deg); }
+}
+
+.pet-play-animation {
+    animation: petPlayAnimation 0.5s ease-in-out;
+}
+
+@keyframes petCareAnimation {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.pet-care-animation {
+    animation: petCareAnimation 0.3s ease-in-out;
+}
+
+/* Mini-Game Screen */
+#mini-game-screen {
+    position: relative; /* For positioning children absolutely */
+    width: 100%;
+    height: 100%;
+    padding: 0; /* Remove padding if canvas fills entire space */
+    box-sizing: border-box;
+    background-color: #e0f0e0; /* Fallback, canvas will cover this */
+    overflow: hidden; /* Hide anything that might spill out */
+}
+
+#mini-game-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%; /* Fill parent */
+    height: 100%; /* Fill parent */
+    z-index: 0; /* Behind other elements in #mini-game-screen */
+    background-color: #e0f7fa; /* Light sky blue, common for simple game backgrounds */
+}
+
+/* Adjustments for the booking options screen */
+#booking-options-screen .options-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    padding: 20px;
+}
+
+.booking-package {
+    background-color: #f7f7f7;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.booking-package h3 {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+.booking-package ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.booking-package li {
+    margin-bottom: 10px;
+}
+
+.booking-package .price {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    margin-top: 10px;
+}
+
+/* Styles for Booking Summary Screen */
+#booking-summary-screen .summary-details {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+#booking-summary-screen .summary-details p {
+    margin: 8px 0;
+    font-size: 1.1em;
+}
+
+#booking-summary-screen .summary-details strong {
+    color: #333;
+}
+
+#booking-summary-screen #summary-package-details ul {
+    list-style-type: disc;
+    margin-left: 20px;
+    padding-left: 0;
+}
+
+#booking-summary-screen .contact-options-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+#booking-summary-screen .contact-btn {
+    padding: 12px 20px;
+    font-size: 1em;
+    /* Add more specific styling if needed, e.g., different colors for email/whatsapp */
 }

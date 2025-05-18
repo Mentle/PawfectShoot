@@ -35,34 +35,46 @@
             <div id="animal-selection-screen" class="screen">
                 <h2>Pick your animal:</h2>
                 <div class="animal-options">
-                    <button class="animal-btn" data-animal="dog"><img src="assets/dog_icon.png" alt="Dog">Dog</button>
-                    <button class="animal-btn" data-animal="cat"><img src="assets/cat_icon.png" alt="Cat">Cat</button>
-                    <button class="animal-btn" data-animal="rabbit"><img src="assets/rabbit_icon.png" alt="Rabbit">Rabbit</button>
-                    <button class="animal-btn" data-animal="bird"><img src="assets/bird_icon.png" alt="Bird">Bird</button>
-                    <button class="animal-btn" data-animal="fish"><img src="assets/fish_icon.png" alt="Fish">Fish</button>
-                    <button class="animal-btn" data-animal="other"><img src="assets/other_icon.png" alt="Other">Other</button>
+                    <button class="animal-btn" data-animal="dog"><img src="tamagotchi/dog.png" alt="Dog">Dog</button>
+                    <button class="animal-btn" data-animal="cat"><img src="tamagotchi/cat.png" alt="Cat">Cat</button>
+                    <button class="animal-btn" data-animal="rabbit"><img src="tamagotchi/rabbit.png" alt="Rabbit">Rabbit</button>
+                    <button class="animal-btn" data-animal="bird"><img src="tamagotchi/bird.png" alt="Bird">Bird</button>
                 </div>
             </div>
 
             <!-- Screen 2: Size Selection -->
-            <div id="size-selection-screen" class="screen">
-                <h2>Pick animal size:</h2>
-                <div class="size-options">
-                    <button class="size-btn" data-size="xs">XS</button>
-                    <button class="size-btn" data-size="s">S</button>
-                    <button class="size-btn" data-size="m">M</button>
-                    <button class="size-btn" data-size="l">L</button>
-                    <button class="size-btn" data-size="xl">XL</button>
+            <div id="size-selection-screen" class="tamagotchi-screen" style="display:none;">
+                <h2>Choose Size for Your <span id="chosen-animal-name-size-screen">Pet</span>:</h2>
+                <div class="size-options-visual">
+                    <div class="size-option" data-size="small">
+                        <img src="" alt="Small Pet" id="size-img-small">
+                        <p>Small</p>
+                    </div>
+                    <div class="size-option" data-size="medium">
+                        <img src="" alt="Medium Pet" id="size-img-medium">
+                        <p>Medium</p>
+                    </div>
+                    <div class="size-option" data-size="large">
+                        <img src="" alt="Large Pet" id="size-img-large">
+                        <p>Large</p>
+                    </div>
                 </div>
-                <button class="back-btn" data-target-screen="animal-selection-screen">Back</button>
+                <div class="navigation-buttons">
+                    <button id="back-to-animal-selection-btn" class="tamagotchi-btn">Back</button>
+                    <button id="confirm-size-btn" class="tamagotchi-btn">Next</button>
+                </div>
             </div>
 
             <!-- Screen 3: Name Input -->
             <div id="name-input-screen" class="screen">
-                <h2>Give your animal a name:</h2>
-                <input type="text" id="animal-name-input" placeholder="Enter name">
-                <button id="submit-name-btn">Next</button>
-                <button class="back-btn" data-target-screen="size-selection-screen">Back</button>
+                <div class="name-input-content-area">
+                    <h2>Give your animal a name:</h2>
+                    <input type="text" id="animal-name-input" placeholder="Enter name">
+                </div>
+                <div class="navigation-buttons">
+                    <button class="back-btn tamagotchi-btn" data-target-screen="size-selection-screen">Back</button> 
+                    <button id="submit-name-btn" class="tamagotchi-btn">Next</button>
+                </div>
             </div>
 
             <!-- Screen 4: Tamagotchi Main Scene -->
@@ -70,11 +82,18 @@
                 <h2 id="pet-name-display">[Pet Name]</h2>
                 <div id="pet-area">
                     <img id="pet-image" src="" alt="Your Pet">
+                    <span id="pet-feedback-icon" class="feedback-icon"></span> <!-- For heart, food bowl etc. -->
                 </div>
-                <p>Click to pet!</p>
-                <div>
-                    <button id="restart-tamagotchi-btn">Restart</button>
-                    <button id="book-session-btn">Book Session</button>
+                
+                <div id="interaction-button-group">
+                    <button id="feed-pet-btn" class="interaction-btn tamagotchi-btn"><img src="tamagotchi/icons/feed.png" alt="Feed Icon"> Feed</button>
+                    <button id="play-pet-btn" class="interaction-btn tamagotchi-btn"><img src="tamagotchi/icons/play.png" alt="Play Icon"> Play</button>
+                    <button id="care-pet-btn" class="interaction-btn tamagotchi-btn"><img src="tamagotchi/icons/care.png" alt="Care Icon"> Pet</button>
+                </div>
+
+                <div class="navigation-buttons main-screen-nav">
+                    <button id="restart-tamagotchi-btn" class="tamagotchi-btn">Restart</button>
+                    <button id="book-session-btn" class="tamagotchi-btn">Book Session</button>
                 </div>
             </div>
 
@@ -90,7 +109,7 @@
                         <li>4 fotografías digitales editadas</li>
                     </ul>
                     <p class="price">150 EUR</p>
-                    <button class="select-package-btn" data-package="PAWSIC">Select PAWSIC</button>
+                    <button class="select-package-btn tamagotchi-btn" data-package="PAWSIC">Select PAWSIC</button>
                 </div>
                 <div class="booking-package">
                     <h3>PAWFECT</h3>
@@ -101,10 +120,39 @@
                         <li>8 fotografías</li>
                     </ul>
                     <p class="price">250 EUR</p>
-                    <button class="select-package-btn" data-package="PAWFECT">Select PAWFECT</button>
+                    <button class="select-package-btn tamagotchi-btn" data-package="PAWFECT">Select PAWFECT</button>
                 </div>
-                <button class="back-btn" data-target-screen="tamagotchi-main-screen">Back</button>
+                <div class="navigation-buttons booking-nav">
+                    <button class="back-btn tamagotchi-btn" data-target-screen="tamagotchi-main-screen">Back</button>
+                </div>
             </div>
+
+            <!-- Screen 5.5: Booking Summary -->
+            <div id="booking-summary-screen" class="screen" style="display:none;">
+                <h2>Confirm Your Booking Details:</h2>
+                <div class="summary-details">
+                    <p><strong>Pet's Name:</strong> <span id="summary-pet-name"></span></p>
+                    <p><strong>Pet Type:</strong> <span id="summary-pet-type"></span></p>
+                    <p><strong>Pet Size:</strong> <span id="summary-pet-size"></span></p>
+                    <p><strong>Selected Package:</strong> <span id="summary-package-name"></span></p>
+                    <div id="summary-package-details"></div> <!-- For <ul> list -->
+                    <p><strong>Price:</strong> <span id="summary-package-price"></span></p>
+                </div>
+                <div class="contact-options-buttons">
+                    <button id="contact-email-btn" class="tamagotchi-btn contact-btn">Contact via Email</button>
+                    <button id="contact-whatsapp-btn" class="tamagotchi-btn contact-btn">Contact via WhatsApp</button>
+                </div>
+                <div class="navigation-buttons">
+                    <button class="back-btn tamagotchi-btn" data-target-screen="booking-options-screen">Back to Packages</button>
+                </div>
+            </div>
+
+            <!-- Screen 6: Mini-Game (Dino Clone) -->
+            <div id="mini-game-screen" class="screen" style="display:none;">
+                <canvas id="mini-game-canvas"></canvas>
+                <!-- Navigation buttons removed -->
+            </div>
+
         </div>
     </div>
 </body>
