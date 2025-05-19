@@ -8,12 +8,16 @@ import { initTamagotchiGame } from './tamagotchi_game.js'; // Import the init fu
 // --- Global Variables ---
 let scene, camera, renderer, controls, roomGroup;
 let ceilingLight, spotLight; 
-let gallery_wall, gallery_floor, gallery_ceiling; // Restore gallery globals
+let gallery_wall, gallery_floor, gallery_ceiling, gallery_top_back_wall, gallery_bottom_back_wall; // RENAMED gallery_back_wall, ADDED gallery_bottom_back_wall
 let wallWidth, wallHeight, wallDistance, floorSize;
 let galleryTexture; // Original loaded texture
-let floorTexture, wallTexture, ceilingTexture; // Cloned textures for each section
+let floorTexture, wallTexture, ceilingTexture, topBackWallTexture, bottomBackWallTexture; // RENAMED backWallTexture, ADDED bottomBackWallTexture
 const clock = new THREE.Clock(); // Clock for deltaTime
 const scrollSpeed = 0.05; // Adjust scroll speed as needed
+let isGalleryInteractionPaused = false; // To pause gallery scrolling
+let lastTouchY = 0; // For touch drag scrolling
+const wheelScrollSensitivity = 0.0005; // Sensitivity for mouse wheel scrolling
+const touchScrollSensitivity = 0.001; // Sensitivity for touch drag scrolling
 
 // Raycasting and Popup
 let raycaster, mouse;
@@ -29,8 +33,8 @@ let currentOffsets = {}; // For geometry position adjustments
 
 // --- Texture Scroll Offset Logic ---
 // These will now represent the FIXED starting V-coordinate offset for each section
-const desktopTextureOffsets = { wall: 0, floor: -0.178, ceiling: 0.213}; // Hardcoded from user feedback
-const mobileTextureOffsets = { wall: 0, floor: -0.133, ceiling: 0.133};    // Default mobile offsets (adjust if needed)
+const desktopTextureOffsets = { wall: 0, floor: -0.178, ceiling: 0.213, topBackWall: 0, bottomBackWall: 0 }; // RENAMED backWall, ADDED bottomBackWall
+const mobileTextureOffsets = { wall: 0, floor: -0.133, ceiling: 0.133, topBackWall: 0.27, bottomBackWall: 0 };    // RENAMED backWall, ADDED bottomBackWall
 let currentTextureOffsets = {}; // Holds the active set (desktop or mobile)
 let baseScrollOffset = 0; // Unified scroll position tracker
 
@@ -117,6 +121,10 @@ function init() {
             wallTexture.needsUpdate = true;
             ceilingTexture = galleryTexture.clone();
             ceilingTexture.needsUpdate = true;
+            topBackWallTexture = galleryTexture.clone(); // RENAMED from backWallTexture
+            topBackWallTexture.needsUpdate = true; // RENAMED from backWallTexture
+            bottomBackWallTexture = galleryTexture.clone(); // ADDED
+            bottomBackWallTexture.needsUpdate = true; // ADDED
 
             // --- Assign CLONED textures to materials ---
             const galleryWallMesh = scene.getObjectByName("gallery_wall"); // Assuming this is the 'wall' part
@@ -135,6 +143,22 @@ function init() {
             if (ceilingMesh) {
                 ceilingMesh.material.map = ceilingTexture;
                 ceilingMesh.material.needsUpdate = true;
+            }
+
+            const galleryTopBackWallMesh = scene.getObjectByName("gallery_top_back_wall"); // RENAMED from galleryBackWallMesh
+            if (galleryTopBackWallMesh) { 
+                galleryTopBackWallMesh.material.map = topBackWallTexture; // RENAMED from backWallTexture
+                topBackWallTexture.wrapT = THREE.RepeatWrapping; 
+                topBackWallTexture.repeat.y = -0.5; // CORRECTED: Adjust for halved geometry and flip
+                galleryTopBackWallMesh.material.needsUpdate = true; 
+            }
+
+            const galleryBottomBackWallMesh = scene.getObjectByName("gallery_bottom_back_wall"); // ADDED
+            if (galleryBottomBackWallMesh) { // ADDED
+                galleryBottomBackWallMesh.material.map = bottomBackWallTexture; // ADDED
+                bottomBackWallTexture.wrapT = THREE.RepeatWrapping; // ADDED
+                bottomBackWallTexture.repeat.y = -0.5; // CORRECTED: Adjust for halved geometry and flip
+                galleryBottomBackWallMesh.material.needsUpdate = true; // ADDED
             }
             // -----------------------------------------
 
@@ -164,6 +188,14 @@ function init() {
     // Add event listener for mouse click
     renderer.domElement.addEventListener('click', onDocumentMouseClick);
 
+    // Add event listeners for gallery interaction (pause scrolling)
+    renderer.domElement.addEventListener('mousedown', onGalleryInteractionStart);
+    renderer.domElement.addEventListener('mouseup', onGalleryInteractionEnd);
+    renderer.domElement.addEventListener('touchstart', onGalleryInteractionStart, { passive: false }); // passive: false for preventDefault if needed
+    renderer.domElement.addEventListener('touchend', onGalleryInteractionEnd);
+    renderer.domElement.addEventListener('touchmove', onGalleryInteractionMove, { passive: false }); // For touch drag
+    renderer.domElement.addEventListener('wheel', onDocumentWheel, { passive: false }); // For mouse wheel scroll
+
     // Initial calculation
     updateDimensionsAndOffsets();
     logInstructions();
@@ -177,15 +209,14 @@ function init() {
     }
 
     // Set initial material opacities directly without fade
-    const initialOpacity = (currentViewIndex === 0) ? 1 : 0;
-    // Need to wait for geometry creation, so do this check later or ensure creation order
-    // We'll rely on the fact that materials are created before this point in init
-    // A safer approach might involve setting flags or promises, but this should work
-    // Find the materials by name or reference if meshes aren't global yet
-    // Assuming createRoomGeometry() has run and assigned globals by this point
-    if (gallery_wall && gallery_wall.material) gallery_wall.material.opacity = initialOpacity;
-    if (gallery_floor && gallery_floor.material) gallery_floor.material.opacity = initialOpacity;
-    if (gallery_ceiling && gallery_ceiling.material) gallery_ceiling.material.opacity = initialOpacity;
+    const initialGalleryOpacity = (currentViewIndex === 0) ? 1 : 0.5;
+    if (gallery_wall && gallery_wall.material) gallery_wall.material.opacity = initialGalleryOpacity;
+    if (gallery_floor && gallery_floor.material) gallery_floor.material.opacity = initialGalleryOpacity;
+    if (gallery_ceiling && gallery_ceiling.material) gallery_ceiling.material.opacity = initialGalleryOpacity;
+    if (gallery_top_back_wall && gallery_top_back_wall.material) gallery_top_back_wall.material.opacity = initialGalleryOpacity; // RENAMED gallery_back_wall
+    if (gallery_bottom_back_wall && gallery_bottom_back_wall.material) gallery_bottom_back_wall.material.opacity = initialGalleryOpacity; // ADDED
+
+    // Position and rotate elements based on currentViewIndex
 
     // --- Add Arrow Button Listeners ---
     const arrowLeft = document.getElementById('arrow-left');
@@ -217,10 +248,26 @@ function createRoomGeometry() {
     const galleryWallMaterial = new THREE.MeshStandardMaterial({ 
         color: '#ffffff', // White base color to show texture purely
         side: THREE.DoubleSide,
-        map: galleryTexture, // Assign texture later if needed, or rely on load callback
+        map: null, // Initialize with null, texture assigned later
         transparent: true // Restore transparency for PNG gaps
     }); 
     galleryWallMaterial.name = "galleryWallMaterial"; // Renamed
+
+    const galleryTopBackWallMaterial = new THREE.MeshStandardMaterial({ // RENAMED from galleryBackWallMaterial
+        color: '#ffffff',
+        side: THREE.DoubleSide,
+        map: null, // Texture assigned later in init
+        transparent: true
+    });
+    galleryTopBackWallMaterial.name = "galleryTopBackWallMaterial"; // RENAMED
+
+    const galleryBottomBackWallMaterial = new THREE.MeshStandardMaterial({ // ADDED
+        color: '#ffffff',
+        side: THREE.DoubleSide,
+        map: null, // Texture assigned later in init
+        transparent: true
+    });
+    galleryBottomBackWallMaterial.name = "galleryBottomBackWallMaterial"; // ADDED
 
     const sideWallMaterial = new THREE.MeshStandardMaterial({ color: '#e0e0e0', side: THREE.DoubleSide });
     sideWallMaterial.name = "sideWallMaterial";
@@ -267,6 +314,46 @@ function createRoomGeometry() {
     gallery_ceiling = new THREE.Mesh(floorCeilingGeometry, galleryCeilingMaterial); // Assign to global var
     gallery_ceiling.name = "gallery_ceiling";
     roomGroup.add(gallery_ceiling);
+
+    // --- Top Back Wall (Upside-down Triangle) ---
+    const topTriangleGeometry = new THREE.BufferGeometry();
+    const topVertices = new Float32Array([
+        0,    -0.5, 0,  // v0 (bottom-center point)
+        1.32,   0, 0,  // v1 (top-right)
+        -1.32,   0, 0   // v2 (top-left)
+    ]);
+    const topUvs = new Float32Array([
+        0.5, 0, // uv for v0
+        1,   1, // uv for v1
+        0,   1  // uv for v2
+    ]);
+    topTriangleGeometry.setAttribute('position', new THREE.BufferAttribute(topVertices, 3));
+    topTriangleGeometry.setAttribute('uv', new THREE.BufferAttribute(topUvs, 2));
+    topTriangleGeometry.setIndex([0, 1, 2]); // Defines the face (v0, v1, v2)
+    topTriangleGeometry.computeVertexNormals();
+    gallery_top_back_wall = new THREE.Mesh(topTriangleGeometry, galleryTopBackWallMaterial);
+    gallery_top_back_wall.name = "gallery_top_back_wall"; // RENAMED from gallery_back_wall
+    roomGroup.add(gallery_top_back_wall);
+
+    // --- Bottom Back Wall (Regular Triangle) ---
+    const bottomTriangleGeometry = new THREE.BufferGeometry();
+    const bottomVertices = new Float32Array([
+       -1.32, 0, 0, // v0 (bottom-left)
+        1.32, 0, 0, // v1 (bottom-right)
+        0,    0.5, 0  // v2 (top-center point)
+    ]);
+    const bottomUvs = new Float32Array([
+        0,   0, // uv for v0
+        1,   0, // uv for v1
+        0.5, 1  // uv for v2
+    ]);
+    bottomTriangleGeometry.setAttribute('position', new THREE.BufferAttribute(bottomVertices, 3));
+    bottomTriangleGeometry.setAttribute('uv', new THREE.BufferAttribute(bottomUvs, 2));
+    bottomTriangleGeometry.setIndex([0, 1, 2]); // Defines the face (v0, v1, v2)
+    bottomTriangleGeometry.computeVertexNormals();
+    gallery_bottom_back_wall = new THREE.Mesh(bottomTriangleGeometry, galleryBottomBackWallMaterial);
+    gallery_bottom_back_wall.name = "gallery_bottom_back_wall"; // ADDED
+    roomGroup.add(gallery_bottom_back_wall);
 
     // --- Actual Room Surfaces ---
     const actual_frontWall = new THREE.Mesh(wallGeometry, actualFrontWallMaterial); // Use distinct material
@@ -367,6 +454,18 @@ function updateDimensionsAndOffsets() {
                  galleryCeiling.material.map.offset.x = 0;
                  galleryCeiling.material.needsUpdate = true;
             }
+            const galleryTopBackWall = roomGroup.getObjectByName("gallery_top_back_wall"); // RENAMED from galleryBackWall
+            if (galleryTopBackWall && galleryTopBackWall.material.map === galleryTexture) { // RENAMED from galleryBackWall
+                 galleryTopBackWall.material.map.repeat.set(1, 1); // RENAMED from galleryBackWall
+                 galleryTopBackWall.material.map.offset.x = 0; // RENAMED from galleryBackWall
+                 galleryTopBackWall.material.needsUpdate = true; // RENAMED from galleryBackWall
+            }
+            const galleryBottomBackWall = roomGroup.getObjectByName("gallery_bottom_back_wall"); // ADDED
+            if (galleryBottomBackWall && galleryBottomBackWall.material.map === galleryTexture) { // ADDED
+                 galleryBottomBackWall.material.map.repeat.set(1, 1); // ADDED
+                 galleryBottomBackWall.material.map.offset.x = 0; // ADDED
+                 galleryBottomBackWall.material.needsUpdate = true; // ADDED
+            }
         }
     }
     // ----------------------------------
@@ -381,6 +480,8 @@ function updateDimensionsAndOffsets() {
     const galleryWallMesh = roomGroup.getObjectByName("gallery_wall");
     const galleryFloorMesh = roomGroup.getObjectByName("gallery_floor");
     const galleryCeilingMesh = roomGroup.getObjectByName("gallery_ceiling");
+    const galleryTopBackWallMesh = roomGroup.getObjectByName("gallery_top_back_wall"); // RENAMED from galleryBackWallMesh
+    const galleryBottomBackWallMesh = roomGroup.getObjectByName("gallery_bottom_back_wall"); // ADDED
     const actualFrontWallMesh = roomGroup.getObjectByName("actual_frontWall");
     const actualFloorMesh = roomGroup.getObjectByName("actual_floor");
     const actualCeilingMesh = roomGroup.getObjectByName("actual_ceiling");
@@ -404,7 +505,7 @@ function updateDimensionsAndOffsets() {
     if (galleryWallMesh) {
         // Scale the gallery plane itself to the target visual size
         galleryWallMesh.scale.set(targetWidth, targetHeight, 1);
-        galleryWallMesh.position.set(0, 0, -wallDistance + insetAmount); // Center H/V, move slightly forward
+        galleryWallMesh.position.set(0, currentOffsets.wall, -wallDistance + insetAmount); // Center H/V, move slightly forward
     }
     if (galleryFloorMesh) {
         // Scale floor geometry like the wall: X = targetWidth, Y = targetHeight (depth after rotation)
@@ -417,6 +518,16 @@ function updateDimensionsAndOffsets() {
         galleryCeilingMesh.scale.set(targetWidth, targetHeight, 1);
         galleryCeilingMesh.position.set(0, wallHeight / 2 - insetAmount, 0); 
         galleryCeilingMesh.rotation.x = Math.PI / 2;
+    }
+    if (galleryTopBackWallMesh) { // RENAMED from galleryBackWallMesh
+        galleryTopBackWallMesh.scale.set(targetWidth, targetHeight / 2, 1); // Scale to half height
+        galleryTopBackWallMesh.position.set(0, currentOffsets.wall + targetHeight / 4, wallDistance - insetAmount); // Position in top half
+        // Rotation for upside down texture is handled by texture.repeat.y = -1
+    }
+    if (galleryBottomBackWallMesh) { // ADDED
+        galleryBottomBackWallMesh.scale.set(targetWidth, targetHeight / 2, 1); // Scale to half height
+        galleryBottomBackWallMesh.position.set(0, currentOffsets.wall - targetHeight / 4, wallDistance - insetAmount); // Position in bottom half
+        // Rotation for upside down texture is handled by texture.repeat.y = -1
     }
     if (actualFrontWallMesh) {
         actualFrontWallMesh.scale.set(wallWidth, wallHeight, 1);
@@ -478,17 +589,10 @@ function handleKeyDown(event) {
 
     // Proceed with rotation only if a valid key was pressed and view index changes
     if (performRotation && newViewIndex !== currentViewIndex) {
-        // If moving away from gallery (viewIndex 0) to another wall
-        if (currentViewIndex === 0 && newViewIndex !== 0) {
-            console.log(`Moving away from gallery. Current: ${currentViewIndex}, New: ${newViewIndex}, Target Angle: ${targetAngle}`);
-            transitionLights(newViewIndex, targetAngle); // Pass targetAngle for delayed rotation
-        } 
-        // If moving towards gallery OR between non-gallery walls
-        else {
-            console.log(`Moving to gallery or between walls. Current: ${currentViewIndex}, New: ${newViewIndex}, Target Angle: ${targetAngle}`);
-            rotateRoom(targetAngle); // Rotate room immediately
-            transitionLights(newViewIndex); // Transition lights without delay
-        }
+        console.log(`Keyboard navigation. Current: ${currentViewIndex}, New: ${newViewIndex}, Target Angle: ${targetAngle}`);
+        rotateRoom(targetAngle);      // Rotate room immediately
+        transitionLights(newViewIndex); // Transition lights without special delay pathway
+
         currentViewIndex = newViewIndex; // Update the current view index
     }
 }
@@ -522,19 +626,6 @@ function updateGeometryPositionsWithOffsets(roomGroup, currentOffsets) {
         galleryCeilingMesh.position.y = wallHeight / 2 + currentOffsets.ceiling - insetAmount; // Apply offset - inset
      }
 
-     const actualFrontWallMesh = roomGroup.getObjectByName("actual_frontWall");
-      if (actualFrontWallMesh) {
-          // Apply wall offset if needed, e.g., to z-position
-          // actualFrontWallMesh.position.z = -wallDistance + currentOffsets.wall;
-      }
-
-     // Also move the gallery wall
-     const galleryWallMesh = roomGroup.getObjectByName("gallery_wall");
-     if (galleryWallMesh) {
-         // Apply wall offset if needed, e.g., to z-position
-         // galleryWallMesh.position.z = -wallDistance + currentOffsets.wall + insetAmount; // Apply offset + inset
-     }
-
       console.log("Geometry positions updated for new offsets.");
  }
 
@@ -563,22 +654,106 @@ function animate() {
 
     // Update the base scroll offset (consistent for all)
     // Add 1 before modulo to handle potential negative results correctly
-    baseScrollOffset = (baseScrollOffset - scrollAmount + 1) % 1; 
+    if (!isGalleryInteractionPaused) {
+        baseScrollOffset = (baseScrollOffset - scrollAmount + 1) % 1; 
+    }
 
     // Apply base scroll + fixed positional offset (from current active set) to each texture
-    if (floorTexture) {
-        floorTexture.offset.y = (baseScrollOffset + currentTextureOffsets.floor + 1) % 1;
-    }
     if (wallTexture) {
         wallTexture.offset.y = (baseScrollOffset + currentTextureOffsets.wall + 1) % 1;
     }
+    if (floorTexture) {
+        floorTexture.offset.y = (baseScrollOffset + currentTextureOffsets.floor + 1) % 1;
+    }
     if (ceilingTexture) {
         ceilingTexture.offset.y = (baseScrollOffset + currentTextureOffsets.ceiling + 1) % 1;
+    }
+    if (topBackWallTexture) { // RENAMED from backWallTexture
+        // The offset logic should be the same. The repeat.y = -1 handles the visual inversion.
+        topBackWallTexture.offset.y = (baseScrollOffset + currentTextureOffsets.topBackWall + 1) % 1; // Use specific topBackWall offset
+    }
+    if (bottomBackWallTexture) { // ADDED
+        // The offset logic should be the same. The repeat.y = -1 handles the visual inversion.
+        bottomBackWallTexture.offset.y = (baseScrollOffset + currentTextureOffsets.bottomBackWall + 1) % 1; // Use specific bottomBackWall offset
     }
 
     TWEEN.update(); // IMPORTANT: Update TWEEN animations
 
     renderer.render(scene, camera);
+}
+
+// --- Mouse Wheel Handler for Gallery Scroll ---
+function onDocumentWheel(event) {
+    if (currentViewIndex === 0) { // Only scroll gallery if it's the active view
+        event.preventDefault(); // Prevent default page scroll
+
+        const scrollAmount = event.deltaY * wheelScrollSensitivity;
+        baseScrollOffset = (baseScrollOffset + scrollAmount + 1) % 1; // Add scroll and ensure positive modulo
+
+        // No need to set isGalleryInteractionPaused for discrete wheel events,
+        // as animate() will pick up the new baseScrollOffset.
+        // console.log(`Wheel scroll: ${scrollAmount}, new baseScrollOffset: ${baseScrollOffset}`);
+    }
+}
+
+// --- Gallery Interaction Handlers ---
+function onGalleryInteractionStart(event) {
+    // Only interact if viewing the gallery
+    if (currentViewIndex !== 0) return;
+
+    // For touch events, use the first touch
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    // Check for intersections with gallery elements
+    // We only care about the wall for pausing, but you could extend this
+    const galleryElements = [gallery_wall, gallery_floor, gallery_ceiling, gallery_top_back_wall, gallery_bottom_back_wall].filter(el => el); // RENAMED gallery_back_wall, ADDED gallery_bottom_back_wall
+    const intersectsGallery = raycaster.intersectObjects(galleryElements, false); // Non-recursive check needed for direct planes
+
+    if (intersectsGallery.length > 0) {
+        // Check if the first intersected object is one of our gallery parts
+        const intersectedObjectName = intersectsGallery[0].object.name;
+        if (intersectedObjectName === "gallery_wall" || 
+            intersectedObjectName === "gallery_floor" || 
+            intersectedObjectName === "gallery_ceiling" ||
+            intersectedObjectName === "gallery_top_back_wall" || // RENAMED gallery_back_wall
+            intersectedObjectName === "gallery_bottom_back_wall") { // ADDED
+            isGalleryInteractionPaused = true;
+            if (event.type === 'touchstart') {
+                lastTouchY = event.touches[0].clientY; // Store initial Y for touch drag
+                event.preventDefault(); 
+            }
+            // console.log("Gallery interaction START - scrolling paused");
+        }
+    }
+}
+
+function onGalleryInteractionMove(event) {
+    if (currentViewIndex !== 0 || !isGalleryInteractionPaused || !event.touches) return; // Only on gallery, if paused, and is a touch event
+
+    event.preventDefault(); // Prevent page scrolling during drag
+
+    const currentTouchY = event.touches[0].clientY;
+    const deltaY = currentTouchY - lastTouchY;
+    lastTouchY = currentTouchY; // Update last Y for next move
+
+    const scrollAmount = deltaY * touchScrollSensitivity;
+    baseScrollOffset = (baseScrollOffset - scrollAmount + 1) % 1; // Subtract because positive deltaY (downward drag) should scroll content up
+    // console.log(`Touch drag: ${deltaY}, new baseScrollOffset: ${baseScrollOffset}`);
+}
+
+function onGalleryInteractionEnd(event) {
+    if (isGalleryInteractionPaused) {
+        isGalleryInteractionPaused = false;
+        lastTouchY = 0; // Reset last touch Y
+        // console.log("Gallery interaction END - scrolling resumed");
+    }
 }
 
 // --- Light Transition Function ---
@@ -591,14 +766,16 @@ function transitionLights(viewIndex, targetAngle = null) { // Added optional tar
     // Check gallery objects and their materials
     if (!gallery_wall || !gallery_wall.material ||
         !gallery_floor || !gallery_floor.material ||
-        !gallery_ceiling || !gallery_ceiling.material) {
+        !gallery_ceiling || !gallery_ceiling.material ||
+        !gallery_top_back_wall || !gallery_top_back_wall.material || // RENAMED gallery_back_wall
+        !gallery_bottom_back_wall || !gallery_bottom_back_wall.material) { // ADDED
         console.error("Gallery elements not initialized for transition!");
         return;
     }
 
     const targetCeilingIntensity = (viewIndex === 0) ? 0 : 30; // Use ceilingLight and intensity 30
     const targetSpotIntensity = (viewIndex === 0) ? 15 : 0;
-    const targetOpacity = (viewIndex === 0) ? 1 : 0; // Target opacity for gallery
+    const targetOpacity = (viewIndex === 0) ? 1 : 0.5; // Target opacity for gallery (100% or 50%)
     const movingAwayFromGallery = (targetSpotIntensity === 0 && targetAngle !== null); // Check if we're moving away AND received an angle
 
     console.log(`Transitioning lights to view ${viewIndex}. Moving away: ${movingAwayFromGallery}`);
@@ -620,6 +797,14 @@ function transitionLights(viewIndex, targetAngle = null) { // Added optional tar
         .easing(TWEEN.Easing.Quadratic.InOut)
         .start();
     new TWEEN.Tween(gallery_ceiling.material)
+        .to({ opacity: targetOpacity }, lightFadeDuration)
+        .easing(TWEEN.Easing.Quadratic.InOut)
+        .start();
+    new TWEEN.Tween(gallery_top_back_wall.material) // RENAMED gallery_back_wall
+        .to({ opacity: targetOpacity }, lightFadeDuration)
+        .easing(TWEEN.Easing.Quadratic.InOut)
+        .start();
+    new TWEEN.Tween(gallery_bottom_back_wall.material) // ADDED
         .to({ opacity: targetOpacity }, lightFadeDuration)
         .easing(TWEEN.Easing.Quadratic.InOut)
         .start();
