@@ -315,45 +315,13 @@ function createRoomGeometry() {
     gallery_ceiling.name = "gallery_ceiling";
     roomGroup.add(gallery_ceiling);
 
-    // --- Top Back Wall (Upside-down Triangle) ---
-    const topTriangleGeometry = new THREE.BufferGeometry();
-    const topVertices = new Float32Array([
-        0,    -0.5, 0,  // v0 (bottom-center point)
-        1.32,   0, 0,  // v1 (top-right)
-        -1.32,   0, 0   // v2 (top-left)
-    ]);
-    const topUvs = new Float32Array([
-        0.5, 0, // uv for v0
-        1,   1, // uv for v1
-        0,   1  // uv for v2
-    ]);
-    topTriangleGeometry.setAttribute('position', new THREE.BufferAttribute(topVertices, 3));
-    topTriangleGeometry.setAttribute('uv', new THREE.BufferAttribute(topUvs, 2));
-    topTriangleGeometry.setIndex([0, 1, 2]); // Defines the face (v0, v1, v2)
-    topTriangleGeometry.computeVertexNormals();
-    gallery_top_back_wall = new THREE.Mesh(topTriangleGeometry, galleryTopBackWallMaterial);
-    gallery_top_back_wall.name = "gallery_top_back_wall"; // RENAMED from gallery_back_wall
-    roomGroup.add(gallery_top_back_wall);
+    gallery_top_back_wall = new THREE.Mesh(wallGeometry, galleryTopBackWallMaterial); // RENAMED from galleryBackWallMesh
+    gallery_top_back_wall.name = "gallery_top_back_wall"; // RENAMED from galleryBackWallMesh
+    roomGroup.add(gallery_top_back_wall); // RENAMED from galleryBackWallMesh
 
-    // --- Bottom Back Wall (Regular Triangle) ---
-    const bottomTriangleGeometry = new THREE.BufferGeometry();
-    const bottomVertices = new Float32Array([
-       -1.32, 0, 0, // v0 (bottom-left)
-        1.32, 0, 0, // v1 (bottom-right)
-        0,    0.5, 0  // v2 (top-center point)
-    ]);
-    const bottomUvs = new Float32Array([
-        0,   0, // uv for v0
-        1,   0, // uv for v1
-        0.5, 1  // uv for v2
-    ]);
-    bottomTriangleGeometry.setAttribute('position', new THREE.BufferAttribute(bottomVertices, 3));
-    bottomTriangleGeometry.setAttribute('uv', new THREE.BufferAttribute(bottomUvs, 2));
-    bottomTriangleGeometry.setIndex([0, 1, 2]); // Defines the face (v0, v1, v2)
-    bottomTriangleGeometry.computeVertexNormals();
-    gallery_bottom_back_wall = new THREE.Mesh(bottomTriangleGeometry, galleryBottomBackWallMaterial);
+    gallery_bottom_back_wall = new THREE.Mesh(wallGeometry, galleryBottomBackWallMaterial); // ADDED
     gallery_bottom_back_wall.name = "gallery_bottom_back_wall"; // ADDED
-    roomGroup.add(gallery_bottom_back_wall);
+    roomGroup.add(gallery_bottom_back_wall); // ADDED
 
     // --- Actual Room Surfaces ---
     const actual_frontWall = new THREE.Mesh(wallGeometry, actualFrontWallMaterial); // Use distinct material
