@@ -34,7 +34,7 @@ let currentOffsets = {}; // For geometry position adjustments
 // --- Texture Scroll Offset Logic ---
 // These will now represent the FIXED starting V-coordinate offset for each section
 const desktopTextureOffsets = { wall: 0, floor: -0.178, ceiling: 0.213, topBackWall: 0, bottomBackWall: 0 }; // RENAMED backWall, ADDED bottomBackWall
-const mobileTextureOffsets = { wall: 0, floor: -0.133, ceiling: 0.133, topBackWall: 0.27, bottomBackWall: 0 };    // RENAMED backWall, ADDED bottomBackWall
+const mobileTextureOffsets = { wall: 0, floor: -0.133, ceiling: 0.133, topBackWall: -0.23, bottomBackWall: -0.265 };    // RENAMED backWall, ADDED bottomBackWall
 let currentTextureOffsets = {}; // Holds the active set (desktop or mobile)
 let baseScrollOffset = 0; // Unified scroll position tracker
 
@@ -150,6 +150,13 @@ function init() {
                 galleryTopBackWallMesh.material.map = topBackWallTexture; // RENAMED from backWallTexture
                 topBackWallTexture.wrapT = THREE.RepeatWrapping; 
                 topBackWallTexture.repeat.y = -0.5; // CORRECTED: Adjust for halved geometry and flip
+                
+                // Apply trapezoidal alpha map for the top back wall
+                const topTrapezoidAlpha = createTrapezoidAlphaMap(true, 512, 0.0, 0.81); // Inverted, pointy, base offset by 10%
+                topTrapezoidAlpha.repeat.set(1, 1);
+                topTrapezoidAlpha.offset.set(0, 0);
+                galleryTopBackWallMesh.material.alphaMap = topTrapezoidAlpha;
+                galleryTopBackWallMesh.material.transparent = true;
                 galleryTopBackWallMesh.material.needsUpdate = true; 
             }
 
@@ -158,6 +165,13 @@ function init() {
                 galleryBottomBackWallMesh.material.map = bottomBackWallTexture; // ADDED
                 bottomBackWallTexture.wrapT = THREE.RepeatWrapping; // ADDED
                 bottomBackWallTexture.repeat.y = -0.5; // CORRECTED: Adjust for halved geometry and flip
+
+                // Apply trapezoidal alpha map for the bottom back wall
+                const bottomTrapezoidAlpha = createTrapezoidAlphaMap(false, 512, 0.0, 0.81); // Upright, pointy, base offset by 10%
+                bottomTrapezoidAlpha.repeat.set(1, 1);
+                bottomTrapezoidAlpha.offset.set(0, 0);
+                galleryBottomBackWallMesh.material.alphaMap = bottomTrapezoidAlpha;
+                galleryBottomBackWallMesh.material.transparent = true;
                 galleryBottomBackWallMesh.material.needsUpdate = true; // ADDED
             }
             // -----------------------------------------
@@ -199,22 +213,32 @@ function init() {
     // Initial calculation
     updateDimensionsAndOffsets();
     logInstructions();
-    // Set initial intensities directly without fade for the first load
-    if (currentViewIndex === 0) {
-        ceilingLight.intensity = 0; // Use ceilingLight
-        spotLight.intensity = 15;
-    } else {
-        ceilingLight.intensity = 30; // Use ceilingLight and intensity 30
-        spotLight.intensity = 0;
-    }
+    // Set initial intensities directly: consistent lighting
+    ceilingLight.intensity = 30; // Always on at intensity 30
+    spotLight.intensity = 0;    // Always off
 
     // Set initial material opacities directly without fade
-    const initialGalleryOpacity = (currentViewIndex === 0) ? 1 : 0.5;
-    if (gallery_wall && gallery_wall.material) gallery_wall.material.opacity = initialGalleryOpacity;
-    if (gallery_floor && gallery_floor.material) gallery_floor.material.opacity = initialGalleryOpacity;
-    if (gallery_ceiling && gallery_ceiling.material) gallery_ceiling.material.opacity = initialGalleryOpacity;
-    if (gallery_top_back_wall && gallery_top_back_wall.material) gallery_top_back_wall.material.opacity = initialGalleryOpacity; // RENAMED gallery_back_wall
-    if (gallery_bottom_back_wall && gallery_bottom_back_wall.material) gallery_bottom_back_wall.material.opacity = initialGalleryOpacity; // ADDED
+    const initialGalleryOpacity = 1; // Always 100% overall opacity
+    if (gallery_wall && gallery_wall.material) {
+        gallery_wall.material.opacity = initialGalleryOpacity;
+        gallery_wall.material.transparent = true; // Respect texture's alpha channel
+    }
+    if (gallery_floor && gallery_floor.material) {
+        gallery_floor.material.opacity = initialGalleryOpacity;
+        gallery_floor.material.transparent = true; // Respect texture's alpha channel
+    }
+    if (gallery_ceiling && gallery_ceiling.material) {
+        gallery_ceiling.material.opacity = initialGalleryOpacity;
+        gallery_ceiling.material.transparent = true; // Respect texture's alpha channel
+    }
+    if (gallery_top_back_wall && gallery_top_back_wall.material) { // RENAMED gallery_back_wall
+        gallery_top_back_wall.material.opacity = initialGalleryOpacity;
+        gallery_top_back_wall.material.transparent = true; // Respect texture's alpha channel
+    }
+    if (gallery_bottom_back_wall && gallery_bottom_back_wall.material) { // ADDED
+        gallery_bottom_back_wall.material.opacity = initialGalleryOpacity;
+        gallery_bottom_back_wall.material.transparent = true; // Respect texture's alpha channel
+    }
 
     // Position and rotate elements based on currentViewIndex
 
@@ -233,6 +257,89 @@ function init() {
         transitionLights(currentViewIndex); // Use new fade function
         rotateRoom(targetAngles[currentViewIndex]); 
     });
+}
+
+// Function to create a trapezoidal alpha map
+function createTrapezoidAlphaMap(inverted = false, size = 256, tipWidthFraction = 0.0, baseOffsetYFraction = 0.0) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
+    
+    context.fillStyle = 'black'; // Transparent areas
+    context.fillRect(0, 0, size, size);
+
+    context.fillStyle = 'white'; // Opaque areas
+    context.beginPath();
+
+    const baseTopY = size * baseOffsetYFraction;
+    const baseBottomY = size * (1.0 - baseOffsetYFraction);
+
+    if (tipWidthFraction === 0.0) { // Optimized path for true triangles
+        if (inverted) {
+            // Upside-down triangle (points down)
+            context.moveTo(0, baseTopY); // Top-left of base
+            context.lineTo(size, baseTopY); // Top-right of base
+            context.lineTo(size / 2, size); // Bottom-center tip (at very bottom of canvas)
+        } else {
+            // Right-side-up triangle (points up)
+            context.moveTo(0, baseBottomY); // Bottom-left of base
+            context.lineTo(size, baseBottomY); // Bottom-right of base
+            context.lineTo(size / 2, 0); // Top-center tip (at very top of canvas)
+        }
+    } else { // Original trapezoid logic for other tipWidthFractions
+        const tipHalfWidth = (size * tipWidthFraction) / 2;
+        if (inverted) {
+            context.moveTo(0, baseTopY); // Top-left of base
+            context.lineTo(size, baseTopY); // Top-right of base
+            context.lineTo(size / 2 + tipHalfWidth, size); // Bottom-right of tip
+            context.lineTo(size / 2 - tipHalfWidth, size); // Bottom-left of tip
+        } else {
+            context.moveTo(0, baseBottomY); // Bottom-left of base
+            context.lineTo(size, baseBottomY); // Bottom-right of base
+            context.lineTo(size / 2 + tipHalfWidth, 0); // Top-right of tip
+            context.lineTo(size / 2 - tipHalfWidth, 0); // Top-left of tip
+        }
+    }
+    context.closePath();
+    context.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true; // Ensure the texture is updated
+    return texture;
+}
+
+// Function to create a procedural wood plank texture
+function createWoodPlankTexture(baseColorHex, plankLineColorHex, textureWidth = 256, textureHeight = 256, plankThickness = 32, lineThickness = 2) {
+    const canvas = document.createElement('canvas');
+    canvas.width = textureWidth;
+    canvas.height = textureHeight;
+    const context = canvas.getContext('2d');
+
+    // Base color for planks
+    context.fillStyle = baseColorHex;
+    context.fillRect(0, 0, textureWidth, textureHeight);
+
+    // Draw plank lines (assuming planks run vertically in the texture, adjust if horizontal preferred)
+    context.strokeStyle = plankLineColorHex;
+    context.lineWidth = lineThickness;
+
+    for (let x = 0; x < textureWidth; x += plankThickness) {
+        context.beginPath();
+        // Offset by half line thickness for better centering if line is on the boundary
+        context.moveTo(x + lineThickness / 2, 0); 
+        context.lineTo(x + lineThickness / 2, textureHeight);
+        context.stroke();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping; // Repeat horizontally
+    texture.wrapT = THREE.RepeatWrapping; // Repeat vertically
+    // Example: texture.repeat.set(numHorizontalRepeats, numVerticalRepeats);
+    // Adjust these values based on your floor size and desired plank scale.
+    // For a start, let's assume the floor UVs are set up for a single texture pass.
+    // If planks look too big or small, texture.repeat is the place to adjust.
+    return texture;
 }
 
 function createRoomGeometry() {
@@ -269,19 +376,24 @@ function createRoomGeometry() {
     });
     galleryBottomBackWallMaterial.name = "galleryBottomBackWallMaterial"; // ADDED
 
-    const sideWallMaterial = new THREE.MeshStandardMaterial({ color: '#e0e0e0', side: THREE.DoubleSide });
+    const sideWallMaterial = new THREE.MeshStandardMaterial({ color: '#3d405b', side: THREE.DoubleSide });
     sideWallMaterial.name = "sideWallMaterial";
 
-    const backWallMaterial = new THREE.MeshStandardMaterial({ color: '#d0d0d0', side: THREE.DoubleSide });
+    const backWallMaterial = new THREE.MeshStandardMaterial({ color: '#f4f1de', side: THREE.DoubleSide });
     backWallMaterial.name = "backWallMaterial";
 
-    const actualFrontWallMaterial = new THREE.MeshStandardMaterial({ color: '#e8e8e8', side: THREE.DoubleSide });
+    const actualFrontWallMaterial = new THREE.MeshStandardMaterial({ color: '#f4f1de', side: THREE.DoubleSide });
     actualFrontWallMaterial.name = "actualFrontWallMaterial";
 
-    const actualFloorMaterial = new THREE.MeshStandardMaterial({ color: '#c8c8c8', side: THREE.DoubleSide });
+    const woodPlankFloorTexture = createWoodPlankTexture('#e07a5f', '#BF654C', 256, 256, 32, 2);
+    const actualFloorMaterial = new THREE.MeshStandardMaterial({ 
+        map: woodPlankFloorTexture, 
+        side: THREE.DoubleSide,
+        // color: 0xffffff, // Set to white if texture contains all color info, to avoid tinting
+    });
     actualFloorMaterial.name = "actualFloorMaterial";
 
-    const actualCeilingMaterial = new THREE.MeshStandardMaterial({ color: '#f0f0f0', side: THREE.DoubleSide });
+    const actualCeilingMaterial = new THREE.MeshStandardMaterial({ color: '#f4f1de', side: THREE.DoubleSide });
     actualCeilingMaterial.name = "actualCeilingMaterial";
 
     const galleryFloorMaterial = new THREE.MeshStandardMaterial({ 
@@ -363,7 +475,7 @@ function updateDimensionsAndOffsets() {
     currentOffsets = isMobile ? { ...mobileOffsets } : { ...desktopOffsets };
     console.log(`View mode: ${isMobile ? 'Mobile' : 'Desktop'}, Initial Geometry Offsets:`, currentOffsets);
 
-    // ---> Update Active Texture Offsets <--- 
+    // Update Active Texture Offsets
     currentTextureOffsets = isMobile ? { ...mobileTextureOffsets } : { ...desktopTextureOffsets };
     console.log(`Active Texture Offsets:`, currentTextureOffsets);
 
@@ -372,7 +484,7 @@ function updateDimensionsAndOffsets() {
     camera.updateProjectionMatrix();
 
     const cameraZ = isMobile ? 1.8 : 2.5; // Bring camera closer in mobile
-    const cameraY = isMobile ? 0.3 : 0; // Raise camera slightly in mobile view
+    const cameraY = isMobile ? 0 : 0; // Raise camera slightly in mobile view
     camera.position.set(0, cameraY, cameraZ);
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
@@ -679,25 +791,34 @@ function onGalleryInteractionStart(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
-    // Check for intersections with gallery elements
-    // We only care about the wall for pausing, but you could extend this
-    const galleryElements = [gallery_wall, gallery_floor, gallery_ceiling, gallery_top_back_wall, gallery_bottom_back_wall].filter(el => el); // RENAMED gallery_back_wall, ADDED gallery_bottom_back_wall
-    const intersectsGallery = raycaster.intersectObjects(galleryElements, false); // Non-recursive check needed for direct planes
+    // --- MODIFICATION START: Check for back wall view --- 
+    // Only allow PC click if looking at the back wall (currentViewIndex === 2)
+    if (currentViewIndex !== 2) {
+        // Optional: Log or provide feedback if click is attempted from wrong view
+        // console.log("PC can only be interacted with from the back wall view.");
+        return; // Exit if not the back view
+    }
+    // --- MODIFICATION END ---
 
-    if (intersectsGallery.length > 0) {
-        // Check if the first intersected object is one of our gallery parts
-        const intersectedObjectName = intersectsGallery[0].object.name;
-        if (intersectedObjectName === "gallery_wall" || 
-            intersectedObjectName === "gallery_floor" || 
-            intersectedObjectName === "gallery_ceiling" ||
-            intersectedObjectName === "gallery_top_back_wall" || // RENAMED gallery_back_wall
-            intersectedObjectName === "gallery_bottom_back_wall") { // ADDED
-            isGalleryInteractionPaused = true;
-            if (event.type === 'touchstart') {
-                lastTouchY = event.touches[0].clientY; // Store initial Y for touch drag
-                event.preventDefault(); 
-            }
-            // console.log("Gallery interaction START - scrolling paused");
+    if (!deskModel) {
+        console.log("Desk model not loaded yet or not assigned to deskModel variable.");
+        return;
+    }
+
+    // Check for intersections with the desk model specifically
+    // The 'true' argument means it will check recursively (all descendants)
+    const intersects = raycaster.intersectObject(deskModel, true); 
+
+    if (intersects.length > 0) {
+        // The first intersected object (intersects[0].object) is part of the deskModel
+        // because we specifically intersected with deskModel and its children.
+        console.log("PC Desk (or part of it) clicked!", intersects[0].object);
+        
+        if (tamagotchiPopup) {
+            tamagotchiPopup.style.display = 'flex'; // Show the popup
+            initTamagotchiGame(); // Initialize or re-initialize the game
+        } else {
+            console.error("tamagotchiPopup element not found.");
         }
     }
 }
@@ -725,78 +846,28 @@ function onGalleryInteractionEnd(event) {
 }
 
 // --- Light Transition Function ---
-function transitionLights(viewIndex, targetAngle = null) { // Added optional targetAngle
-    // Check lights
+function transitionLights(viewIndex, targetAngle = null) { // targetAngle param is part of an older, currently inactive, delayed rotation logic
+    // Lights are now static (set in init()) and do not transition their intensity.
+    // This function is kept as it's part of the navigation flow (called by arrows/keys),
+    // but its role in changing light intensities has been removed.
+
+    // console.log(`transitionLights called for view ${viewIndex}. Lighting is static.`);
+    // console.log(`Current static lighting: CeilingLight intensity: ${ceilingLight ? ceilingLight.intensity : 'N/A'}, SpotLight intensity: ${spotLight ? spotLight.intensity : 'N/A'}`);
+
+    // Original checks for lights and gallery elements can be kept minimal or for future use,
+    // but are not critical for the (now removed) light intensity transitions.
     if (!ceilingLight || !spotLight) {
-        console.error("Lights not initialized for transition!");
+        // console.error("Lights not initialized! This shouldn't happen if init() completed.");
         return;
     }
-    // Check gallery objects and their materials
-    if (!gallery_wall || !gallery_wall.material ||
-        !gallery_floor || !gallery_floor.material ||
-        !gallery_ceiling || !gallery_ceiling.material ||
-        !gallery_top_back_wall || !gallery_top_back_wall.material || // RENAMED gallery_back_wall
-        !gallery_bottom_back_wall || !gallery_bottom_back_wall.material) { // ADDED
-        console.error("Gallery elements not initialized for transition!");
-        return;
+    if (!gallery_wall || !gallery_floor || !gallery_ceiling || 
+        !gallery_top_back_wall || !gallery_bottom_back_wall) {
+        // console.warn("Gallery elements might not be fully initialized if transitionLights is called very early.");
+        // No critical operations depend on them here anymore regarding light transitions.
     }
 
-    const targetCeilingIntensity = (viewIndex === 0) ? 0 : 30; // Use ceilingLight and intensity 30
-    const targetSpotIntensity = (viewIndex === 0) ? 15 : 0;
-    const targetOpacity = (viewIndex === 0) ? 1 : 0.5; // Target opacity for gallery (100% or 50%)
-    const movingAwayFromGallery = (targetSpotIntensity === 0 && targetAngle !== null); // Check if we're moving away AND received an angle
-
-    console.log(`Transitioning lights to view ${viewIndex}. Moving away: ${movingAwayFromGallery}`);
-    console.log(`Targets: Ceiling=${targetCeilingIntensity}, Spot=${targetSpotIntensity}, Opacity=${targetOpacity}`);
-
-    // --- Gallery Spot Light Tween --- (Always starts immediately)
-    new TWEEN.Tween(spotLight)
-        .to({ intensity: targetSpotIntensity }, lightFadeDuration)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .start();
-
-    // --- Gallery Material Opacity Tweens --- (Always start immediately)
-    new TWEEN.Tween(gallery_wall.material)
-        .to({ opacity: targetOpacity }, lightFadeDuration)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .start();
-    new TWEEN.Tween(gallery_floor.material)
-        .to({ opacity: targetOpacity }, lightFadeDuration)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .start();
-    new TWEEN.Tween(gallery_ceiling.material)
-        .to({ opacity: targetOpacity }, lightFadeDuration)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .start();
-    new TWEEN.Tween(gallery_top_back_wall.material) // RENAMED gallery_back_wall
-        .to({ opacity: targetOpacity }, lightFadeDuration)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .start();
-    new TWEEN.Tween(gallery_bottom_back_wall.material) // ADDED
-        .to({ opacity: targetOpacity }, lightFadeDuration)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .start();
-
-    // --- Ceiling Light Tween --- (Conditional delay and callback)
-    const ceilingTween = new TWEEN.Tween(ceilingLight)
-        .to({ intensity: targetCeilingIntensity }, lightFadeDuration)
-        .easing(TWEEN.Easing.Quadratic.InOut);
-
-    if (movingAwayFromGallery) {
-        ceilingTween.delay(500); // 500ms delay before ceiling light starts fading IN
-        ceilingTween.onStart(() => {
-            console.log(`Ceiling light fade IN started (after 500ms delay). Queueing rotation to ${targetAngle} in 100ms.`);
-            setTimeout(() => {
-                 console.log(`Executing delayed rotation to angle: ${targetAngle}`);
-                 rotateRoom(targetAngle);
-            }, 100); // 100ms delay *after* light starts fading in
-        });
-    } else {
-       // No delay if moving towards gallery or between other walls
-       ceilingTween.delay(0);
-    }
-
-    ceilingTween.start();
+    // All TWEEN animations for spotLight and ceilingLight intensity, 
+    // and related logic like 'movingAwayFromGallery', have been removed.
 }
 
 // --- Room Rotation Function ---
