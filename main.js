@@ -24,6 +24,8 @@ const touchScrollSensitivity = 0.001; // Sensitivity for touch drag scrolling
 let raycaster, mouse;
 let deskModel; // To store the loaded desk model
 let backwallPropsModel; // To store the loaded backwall props model
+let leftWallPropsModel; // To store the loaded left wall props model
+let whiteboardModel; // To store the loaded whiteboard model
 let tamagotchiPopup; // Renamed from modelPopup
 // let popupCloseButton; // This will now be handled by tamagotchi_game.js
 
@@ -213,6 +215,8 @@ function init() {
     // Load the PC desk model
     loadDeskModel();
     loadBackwallPropsModel(); // Load the backwall props model
+    loadLeftWallPropsModel(); // Load the new left wall props
+    loadWhiteboardModel();    // Load the new whiteboard
 
     // Event Listeners
     window.addEventListener('resize', onWindowResize);
@@ -1000,6 +1004,58 @@ function loadBackwallPropsModel() {
         },
         function (error) {
             console.error('An error happened during Backwall Props GLTF load:', error);
+        }
+    );
+}
+
+// --- GLTF Import Function for Left Wall Props ---
+function loadLeftWallPropsModel() {
+    const loader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+    loader.setDRACOLoader(dracoLoader);
+
+    const modelPath = '3d Models/leftwall_props.glb';
+
+    loader.load(
+        modelPath,
+        function (gltf) {
+            leftWallPropsModel = gltf.scene;
+            leftWallPropsModel.name = "leftwall_props";
+            roomGroup.add(leftWallPropsModel);
+            console.log("Left Wall Props model loaded and added to roomGroup from:", modelPath);
+        },
+        function (xhr) {
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded of Left Wall Props');
+        },
+        function (error) {
+            console.error('An error happened during Left Wall Props GLTF load:', error);
+        }
+    );
+}
+
+// --- GLTF Import Function for Whiteboard ---
+function loadWhiteboardModel() {
+    const loader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+    loader.setDRACOLoader(dracoLoader);
+
+    const modelPath = '3d Models/whiteboard.glb';
+
+    loader.load(
+        modelPath,
+        function (gltf) {
+            whiteboardModel = gltf.scene;
+            whiteboardModel.name = "whiteboard";
+            roomGroup.add(whiteboardModel);
+            console.log("Whiteboard model loaded and added to roomGroup from:", modelPath);
+        },
+        function (xhr) {
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded of Whiteboard');
+        },
+        function (error) {
+            console.error('An error happened during Whiteboard GLTF load:', error);
         }
     );
 }
