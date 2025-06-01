@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as TWEEN from '@tweenjs/tween.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'; // Import DRACOLoader
 import { initTamagotchiGame } from './tamagotchi_game.js'; // Import the init function
 
 // --- Global Variables ---
@@ -13,7 +14,7 @@ let wallWidth, wallHeight, wallDistance, floorSize;
 let galleryTexture; // Original loaded texture
 let floorTexture, wallTexture, ceilingTexture, topBackWallTexture, bottomBackWallTexture; // RENAMED backWallTexture, ADDED bottomBackWallTexture
 const clock = new THREE.Clock(); // Clock for deltaTime
-const scrollSpeed = 0.05; // Adjust scroll speed as needed
+const scrollSpeed = 0.03; // Adjust scroll speed as needed
 let isGalleryInteractionPaused = false; // To pause gallery scrolling
 let lastTouchY = 0; // For touch drag scrolling
 const wheelScrollSensitivity = 0.0005; // Sensitivity for mouse wheel scrolling
@@ -22,9 +23,29 @@ const touchScrollSensitivity = 0.001; // Sensitivity for touch drag scrolling
 // Raycasting and Popup
 let raycaster, mouse;
 let deskModel; // To store the loaded desk model
-let corchModel; // To store the loaded corch model
+let backwallPropsModel; // To store the loaded backwall props model
 let tamagotchiPopup; // Renamed from modelPopup
 // let popupCloseButton; // This will now be handled by tamagotchi_game.js
+
+// --- Inspect Mode Variables ---
+let isInspecting = false;
+let inspectedObjectGroup = null;
+const inspectableMeshPairs = {
+    'Mesh148_1': 'Mesh148',
+    'Mesh537_1': 'Mesh537',
+    'Mesh303': 'Mesh303_1',
+    'Mesh302': 'Mesh302_1'
+    // Note: Mesh269_1 is not included as it wasn't specified as part of a pair.
+};
+// The keys of inspectableMeshPairs are the 'trigger' meshes
+const inspectableMeshNames = Object.keys(inspectableMeshPairs);
+let originalCameraPosition = new THREE.Vector3(); // To store camera state before inspection
+let originalControlsTarget = new THREE.Vector3(); // To store controls target before inspection
+let hiddenOriginalClickedMesh = null; // To store the original clicked mesh that we hide
+let hiddenOriginalPartnerMesh = null; // To store the original partner mesh that we hide
+let isInspectingModelDrag = false;
+let previousInspectMousePosition = { x: 0, y: 0 };
+// ---
 
 // --- Geometry Offset Logic (Kept for potential future use or other adjustments) ---
 const mobileOffsets = { wall: 0, floor: 0, ceiling: 0 };
@@ -191,9 +212,7 @@ function init() {
 
     // Load the PC desk model
     loadDeskModel();
-
-    // Load the Corch model
-    loadCorchModel();
+    loadBackwallPropsModel(); // Load the backwall props model
 
     // Event Listeners
     window.addEventListener('resize', onWindowResize);
@@ -778,49 +797,51 @@ function onDocumentWheel(event) {
 
 // --- Gallery Interaction Handlers ---
 function onGalleryInteractionStart(event) {
-    // Only interact if viewing the gallery
+    // Only interact if viewing the gallery (front view)
     if (currentViewIndex !== 0) return;
 
-    // For touch events, use the first touch
+    // Determine clientX and clientY based on event type (mouse or touch)
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
+    // Calculate mouse position in normalized device coordinates
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
 
-    // --- MODIFICATION START: Check for back wall view --- 
-    // Only allow PC click if looking at the back wall (currentViewIndex === 2)
-    if (currentViewIndex !== 2) {
-        // Optional: Log or provide feedback if click is attempted from wrong view
-        // console.log("PC can only be interacted with from the back wall view.");
-        return; // Exit if not the back view
-    }
-    // --- MODIFICATION END ---
+    // Define the objects to check for intersection (gallery elements)
+    const galleryElements = [];
+    if (gallery_wall) galleryElements.push(gallery_wall);
+    if (gallery_floor) galleryElements.push(gallery_floor);
+    if (gallery_ceiling) galleryElements.push(gallery_ceiling);
+    // Note: gallery_top_back_wall and gallery_bottom_back_wall are part of the gallery view
+    // but typically interaction for scrolling is on the main wall, floor, ceiling.
+    // If they should also pause/initiate scroll, add them here.
+    // Based on MEMORY[546df686-4220-4781-abb1-0ddd9af8de13], it's wall, floor, ceiling.
 
-    if (!deskModel) {
-        console.log("Desk model not loaded yet or not assigned to deskModel variable.");
+    if (galleryElements.length === 0) {
+        // console.warn("Gallery elements for interaction not found or not yet initialized.");
         return;
     }
 
-    // Check for intersections with the desk model specifically
-    // The 'true' argument means it will check recursively (all descendants)
-    const intersects = raycaster.intersectObject(deskModel, true); 
+    const intersects = raycaster.intersectObjects(galleryElements, false); // false for non-recursive
 
     if (intersects.length > 0) {
-        // The first intersected object (intersects[0].object) is part of the deskModel
-        // because we specifically intersected with deskModel and its children.
-        console.log("PC Desk (or part of it) clicked!", intersects[0].object);
-        
-        if (tamagotchiPopup) {
-            tamagotchiPopup.style.display = 'flex'; // Show the popup
-            initTamagotchiGame(); // Initialize or re-initialize the game
-        } else {
-            console.error("tamagotchiPopup element not found.");
+        // An interactable gallery element was clicked/touched
+        isGalleryInteractionPaused = true;
+        // console.log("Gallery interaction START - scrolling PAUSED");
+
+        if (event.touches) { // If it's a touch event
+            lastTouchY = event.touches[0].clientY; // Store initial Y for drag calculation
+            // console.log(`Touch start, lastTouchY: ${lastTouchY}`);
         }
+        // For mousedown, isGalleryInteractionPaused is set, which stops auto-scroll.
+        // Mouse wheel scrolling is handled by onDocumentWheel and doesn't rely on lastTouchY.
     }
+    // The deskModel interaction logic has been removed from here and is correctly
+    // handled in onDocumentMouseClick.
 }
 
 function onGalleryInteractionMove(event) {
@@ -951,10 +972,52 @@ function exportRoomToGLTF() {
     );
 }
 
+// --- GLTF Import Function for Backwall Props ---
+function loadBackwallPropsModel() {
+    const loader = new GLTFLoader();
+
+    // --- Setup DRACOLoader ---
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+    loader.setDRACOLoader(dracoLoader);
+    // ---
+
+    const modelPath = '3d Models/backwall_props.glb'; // Path to the backwall props model
+
+    loader.load(
+        modelPath,
+        function (gltf) {
+            const loadedModel = gltf.scene;
+            loadedModel.name = "backwall_props";
+            
+            backwallPropsModel = loadedModel;
+
+            roomGroup.add(backwallPropsModel);
+            console.log("Backwall Props model loaded and added to roomGroup from:", modelPath);
+        },
+        function (xhr) {
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded of Backwall Props');
+        },
+        function (error) {
+            console.error('An error happened during Backwall Props GLTF load:', error);
+        }
+    );
+}
+
 // --- GLTF Import Function for Desk ---
 function loadDeskModel() {
     const loader = new GLTFLoader();
-    const modelPath = '3d Models/pc.glb'; // Assuming this path
+
+    // --- Setup DRACOLoader ---
+    const dracoLoader = new DRACOLoader();
+    // Specify path to a folder containing WASM/JS decoding libraries for Draco.
+    // You might need to adjust this path depending on where you host these files.
+    // Using a common CDN path for Three.js examples:
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+    loader.setDRACOLoader(dracoLoader);
+    // ---
+
+    const modelPath = '3d Models/pc.glb'; // Path to the PC desk model
 
     loader.load(
         modelPath,
@@ -980,91 +1043,348 @@ function loadDeskModel() {
     );
 }
 
-// --- GLTF Import Function for Corch ---
-function loadCorchModel() {
-    const loader = new GLTFLoader();
-    const modelPath = '3d Models/corch.glb'; // Path to the corch model
 
-    loader.load(
-        modelPath,
-        function (gltf) {
-            // Called when the resource is loaded
-            const loadedModel = gltf.scene; // gltf.scene is the THREE.Group
-            loadedModel.name = "corch"; // Important for identification
-            
-            corchModel = loadedModel; // Store globally
-
-            // Add the corch model to the roomGroup so it rotates with the room
-            if (roomGroup) {
-                roomGroup.add(corchModel);
-                console.log("Corch model loaded and added to roomGroup from:", modelPath);
-            } else {
-                console.error("roomGroup not initialized before loading corch model. Adding to scene instead.");
-                scene.add(corchModel); // Fallback if roomGroup isn't ready
-            }
-
-            // --- Example: Position and scale the corch model ---
-            // You might need to adjust these values based on the model's original size and pivot
-            // corchModel.position.set(1.5, -wallHeight / 2 + 0.5, -1); // Example: right side, on floor, slightly in front
-            // corchModel.scale.set(0.5, 0.5, 0.5); // Example: scale it down if it's too big
-            // corchModel.rotation.y = -Math.PI / 4; // Example: rotate it slightly
-
-        },
-        function (xhr) {
-            // Called while loading is progressing
-            console.log((xhr.loaded / xhr.total * 100) + '% loaded of Corch model');
-        },
-        function (error) {
-            // Called when loading has errors
-            console.error('An error happened while loading the Corch model:', error);
-            console.error('Attempted to load from path:', modelPath);
+function isDescendant(parent, child) {
+    if (!parent || !child) return false;
+    let node = child.parent;
+    while (node !== null) {
+        if (node === parent) {
+            return true;
         }
-    );
+        node = node.parent;
+    }
+    return false;
 }
-
-// Click event handler for model interaction
 function onDocumentMouseClick(event) {
     event.preventDefault();
+    console.log('[DEBUG] onDocumentMouseClick triggered.');
 
-    // Calculate mouse position in normalized device coordinates (-1 to +1) for both components
-    // Using renderer.domElement.getBoundingClientRect() for more robust coordinate calculation
+    if (isInspecting) {
+        console.log('[DEBUG] Currently inspecting, click ignored.');
+        return;
+    }
+
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
 
-    // --- MODIFICATION START: Check for back wall view --- 
-    // Only allow PC click if looking at the back wall (currentViewIndex === 2)
     if (currentViewIndex !== 2) {
-        // Optional: Log or provide feedback if click is attempted from wrong view
-        // console.log("PC can only be interacted with from the back wall view.");
-        return; // Exit if not the back view
-    }
-    // --- MODIFICATION END ---
-
-    if (!deskModel) {
-        console.log("Desk model not loaded yet or not assigned to deskModel variable.");
+        console.log('[DEBUG] Interaction attempt outside back wall view. currentViewIndex:', currentViewIndex);
         return;
     }
+    console.log('[DEBUG] Back wall view active (currentViewIndex === 2).');
 
-    // Check for intersections with the desk model specifically
-    // The 'true' argument means it will check recursively (all descendants)
-    const intersects = raycaster.intersectObject(deskModel, true); 
+    const intersects = raycaster.intersectObjects(scene.children, true);
+    console.log('[DEBUG] Raycaster intersected objects:', intersects.length);
 
     if (intersects.length > 0) {
-        // The first intersected object (intersects[0].object) is part of the deskModel
-        // because we specifically intersected with deskModel and its children.
-        console.log("PC Desk (or part of it) clicked!", intersects[0].object);
-        
-        if (tamagotchiPopup) {
-            tamagotchiPopup.style.display = 'flex'; // Show the popup
-            initTamagotchiGame(); // Initialize or re-initialize the game
-        } else {
-            console.error("tamagotchiPopup element not found.");
+        console.log('[DEBUG] --- Iterating intersects for inspection ---');
+        for (let i = 0; i < intersects.length; i++) {
+            const clickedObject = intersects[i].object;
+            console.log(`[DEBUG] Intersected [${i}]: ${clickedObject.name}`, clickedObject);
+
+            const isInspectableName = inspectableMeshNames.includes(clickedObject.name);
+            const isChildOfBackwallProps = backwallPropsModel ? isDescendant(backwallPropsModel, clickedObject) : false;
+            
+            console.log(`[DEBUG]   - backwallPropsModel exists: ${!!backwallPropsModel}`);
+            console.log(`[DEBUG]   - Is inspectable name ('${clickedObject.name}' in [${inspectableMeshNames.join(', ')}]): ${isInspectableName}`);
+            console.log(`[DEBUG]   - Is descendant of backwallPropsModel: ${isChildOfBackwallProps}`);
+
+            if (backwallPropsModel && isInspectableName && isChildOfBackwallProps) {
+                console.log('[DEBUG] SUCCESS: Inspectable trigger mesh clicked:', clickedObject.name);
+                const partnerMeshName = inspectableMeshPairs[clickedObject.name];
+                if (!partnerMeshName) {
+                    console.error('[DEBUG] Partner mesh name not found for trigger:', clickedObject.name);
+                    return;
+                }
+                console.log('[DEBUG] Partner mesh to find:', partnerMeshName);
+                enterInspectMode(clickedObject, partnerMeshName);
+                return; 
+            }
         }
+        console.log('[DEBUG] --- Finished iterating intersects for inspection ---');
+
+        console.log('[DEBUG] No inspectable photo clicked, checking for desk model interaction.');
+        if (deskModel) {
+            console.log('[DEBUG] deskModel exists. Checking intersection with deskModel.');
+            const deskIntersects = raycaster.intersectObject(deskModel, true);
+            if (deskIntersects.length > 0) {
+                const clickedDeskObject = deskIntersects[0].object;
+                console.log('[DEBUG] Intersected with deskModel child:', clickedDeskObject.name);
+                if (isDescendant(deskModel, clickedDeskObject)) {
+                    console.log('[DEBUG] SUCCESS: PC Desk (or part of it) clicked! Name:', clickedDeskObject.name);
+                    if (tamagotchiPopup.style.display === 'none' || tamagotchiPopup.style.display === '') {
+                        tamagotchiPopup.style.display = 'flex';
+                        initTamagotchiGame();
+                        console.log('[DEBUG] Tamagotchi popup shown.');
+                    } else {
+                        console.log('[DEBUG] Tamagotchi popup already visible (closing handled by game).');
+                    }
+                    return; 
+                } else {
+                    console.log('[DEBUG] Intersected object is not a descendant of deskModel (should not happen with intersectObject).');
+                }
+            } else {
+                console.log('[DEBUG] No intersection with deskModel.');
+            }
+        } else {
+            console.log('[DEBUG] deskModel does not exist.');
+        }
+    } else {
+        console.log('[DEBUG] No intersections with any scene objects.');
+    }
+    console.log('[DEBUG] onDocumentMouseClick finished without triggering inspection or Tamagotchi.');
+}
+
+
+// --- Inspect Mode Functions ---
+function enterInspectMode(clickedMesh, partnerMeshName) {
+    if (!clickedMesh || !partnerMeshName) {
+        console.error('[DEBUG] enterInspectMode called with missing clickedMesh or partnerMeshName.');
+        return;
+    }
+    isInspecting = true;
+
+    // Save current camera and controls state
+    originalCameraPosition.copy(camera.position);
+    originalControlsTarget.copy(controls.target);
+
+    // Reset hidden mesh trackers
+    hiddenOriginalClickedMesh = null;
+    hiddenOriginalPartnerMesh = null;
+
+    // Clone the clicked mesh FIRST (while it's still visible)
+    const clonedClickedMesh = clickedMesh.clone();
+    clonedClickedMesh.traverse(child => {
+        if (child.isMesh) child.material = child.material.clone();
+    });
+
+    // THEN Hide the original clicked mesh from the scene
+    if (clickedMesh) {
+        clickedMesh.visible = false;
+        hiddenOriginalClickedMesh = clickedMesh;
+        console.log('[DEBUG] Hid original clicked mesh:', clickedMesh.name);
+    }
+    // if (tamagotchiPopup) tamagotchiPopup.style.display = 'none'; // Optionally hide popup if it obstructs view, user can decide later.
+
+    inspectedObjectGroup = new THREE.Group();
+    inspectedObjectGroup.add(clonedClickedMesh); // Add cloned clicked mesh first
+
+    // Find and clone the partner mesh
+    let clonedPartnerMesh = null;
+    if (backwallPropsModel) {
+        const partnerMeshObject = backwallPropsModel.getObjectByName(partnerMeshName);
+        if (partnerMeshObject) {
+            console.log('[DEBUG] Found partner mesh object:', partnerMeshObject.name);
+            clonedPartnerMesh = partnerMeshObject.clone();
+            clonedPartnerMesh.traverse(child => {
+                if (child.isMesh) child.material = child.material.clone();
+            });
+            inspectedObjectGroup.add(clonedPartnerMesh);
+            console.log('[DEBUG] Cloned and added partner mesh to group:', clonedPartnerMesh.name);
+
+            // Hide the original partner mesh from the scene
+            partnerMeshObject.visible = false;
+            hiddenOriginalPartnerMesh = partnerMeshObject;
+            console.log('[DEBUG] Hid original partner mesh:', partnerMeshObject.name);
+        } else {
+            console.error('[DEBUG] Partner mesh object not found in backwallPropsModel:', partnerMeshName);
+            // Decide if you want to proceed with only the clicked mesh or exit
+            // For now, we'll proceed with just the clicked one if partner is missing
+        }
+    } else {
+        console.error('[DEBUG] backwallPropsModel not found, cannot search for partner mesh.');
+    }
+
+    // Center the entire group (containing one or two meshes)
+    // The group's origin will be the center of the bounding box of all its children
+    const groupBox = new THREE.Box3().setFromObject(inspectedObjectGroup);
+    const groupCenter = groupBox.getCenter(new THREE.Vector3());
+    
+    // Offset each child so the group's collective center is at the world origin
+    // This is slightly different from before; we want the group itself to be centered.
+    // An alternative is to move the group itself: inspectedObjectGroup.position.sub(groupCenter);
+    // For now, let's adjust children relative to the group's new desired center (0,0,0)
+    // by effectively moving the group's contents so their collective center aligns with the group's origin.
+    inspectedObjectGroup.children.forEach(child => {
+        child.position.sub(groupCenter);
+    });
+    // NOTE: Diagnostic code for offsetting and material changes has been removed.
+
+    // If we decide to move the group instead: inspectedObjectGroup.position.set(0,0,0).sub(groupCenter) - but then camera needs to target group's new position.
+    // For simplicity with OrbitControls targeting (0,0,0), let's ensure the group's content is centered around its origin.
+    // The above loop does this. The group itself remains at (0,0,0).
+
+    // Add dedicated lighting to the inspected group
+    const inspectAmbientLight = new THREE.AmbientLight(0xffffff, 0.7); // Soft white light
+    inspectedObjectGroup.add(inspectAmbientLight);
+
+    const inspectDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.9); // Brighter directional light
+    inspectDirectionalLight.position.set(1, 1.5, 1).normalize(); // Shining from a top-front-right-ish angle
+    inspectedObjectGroup.add(inspectDirectionalLight);
+    // DirectionalLight targets (0,0,0) by default in its own coordinate system.
+    // Since it's a child of inspectedObjectGroup, and group is at origin, this works well.
+
+    scene.add(inspectedObjectGroup);
+
+    // Configure OrbitControls for inspection
+    controls.enabled = true;
+    controls.target.set(0, 0, 0); // Target the center of the inspectedObjectGroup
+    controls.enablePan = false;
+    controls.enableZoom = false; // Disable OrbitControls zoom
+    controls.enableRotate = false; // Disable OrbitControls rotation
+    controls.autoRotate = false; // Turn off auto-rotate if it was on
+
+    // Add event listeners for manual model rotation
+    renderer.domElement.addEventListener('mousedown', onInspectModelMouseDown, false);
+    renderer.domElement.addEventListener('mousemove', onInspectModelMouseMove, false);
+    renderer.domElement.addEventListener('mouseup', onInspectModelMouseUp, false);
+    renderer.domElement.addEventListener('mouseleave', onInspectModelMouseUp, false); // Also stop drag if mouse leaves canvas
+
+    // Adjust camera for optimal view
+    const size = groupBox.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / Math.tan(fov / 2)); // Calculate distance for full view
+    cameraZ *= 1.5; // Add some padding, adjust as needed
+
+    camera.position.set(0, 0, Math.max(cameraZ, 0.5)); // Ensure cameraZ is not too small
+    controls.minDistance = maxDim * 0.5; // Allow zooming in close
+    controls.maxDistance = cameraZ * 3;   // Allow zooming out
+    
+    controls.update();
+    camera.lookAt(0,0,0);
+
+    createInspectModeExitButton();
+    window.addEventListener('keydown', handleInspectEscapeKey);
+
+    // Hide navigation arrows
+    const arrowLeft = document.getElementById('arrow-left');
+    const arrowRight = document.getElementById('arrow-right');
+    if (arrowLeft) arrowLeft.style.display = 'none';
+    if (arrowRight) arrowRight.style.display = 'none';
+}
+
+function exitInspectMode() {
+    isInspecting = false;
+
+    removeInspectModeExitButton();
+    window.removeEventListener('keydown', handleInspectEscapeKey);
+
+    if (inspectedObjectGroup) {
+        inspectedObjectGroup.traverse(child => {
+            if (child.isMesh) {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(m => m.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
+            }
+        });
+        scene.remove(inspectedObjectGroup);
+        inspectedObjectGroup = null;
+    }
+
+    // Restore visibility of the original meshes that were hidden
+    if (hiddenOriginalClickedMesh) {
+        hiddenOriginalClickedMesh.visible = true;
+        console.log('[DEBUG] Restored visibility of original clicked mesh:', hiddenOriginalClickedMesh.name);
+        hiddenOriginalClickedMesh = null;
+    }
+    if (hiddenOriginalPartnerMesh) {
+        hiddenOriginalPartnerMesh.visible = true;
+        console.log('[DEBUG] Restored visibility of original partner mesh:', hiddenOriginalPartnerMesh.name);
+        hiddenOriginalPartnerMesh = null;
+    } // <-- ADDED MISSING BRACE HERE
+
+    // Restore camera and controls
+    camera.position.copy(originalCameraPosition);
+    controls.target.copy(originalControlsTarget);
+    controls.enabled = true; // Re-enable controls for normal scene interaction
+    controls.enableZoom = true; // Re-enable OrbitControls zoom
+    controls.enableRotate = true; // Re-enable OrbitControls rotation
+    controls.update();
+
+    // Remove event listeners for manual model rotation
+    renderer.domElement.removeEventListener('mousedown', onInspectModelMouseDown, false);
+    renderer.domElement.removeEventListener('mousemove', onInspectModelMouseMove, false);
+    renderer.domElement.removeEventListener('mouseup', onInspectModelMouseUp, false);
+    renderer.domElement.removeEventListener('mouseleave', onInspectModelMouseUp, false);
+
+    isInspectingModelDrag = false;
+
+    // Show navigation arrows
+    const arrowLeft = document.getElementById('arrow-left');
+    const arrowRight = document.getElementById('arrow-right');
+    if (arrowLeft) arrowLeft.style.display = 'block'; // Or 'flex', or original display type
+    if (arrowRight) arrowRight.style.display = 'block'; // Or 'flex', or original display type
+}
+
+function createInspectModeExitButton() {
+    removeInspectModeExitButton(); // Remove if one already exists
+    const button = document.createElement('button');
+    button.id = 'inspect-exit-button';
+    button.textContent = 'Exit Inspect (Esc)';
+    button.style.position = 'fixed';
+    button.style.top = '20px';
+    button.style.right = '20px';
+    button.style.padding = '10px 15px';
+    button.style.backgroundColor = '#333';
+    button.style.color = 'white';
+    button.style.border = 'none';
+    button.style.borderRadius = '5px';
+    button.style.cursor = 'pointer';
+    button.style.zIndex = '10000'; // Ensure it's on top
+    button.onclick = exitInspectMode;
+    document.body.appendChild(button);
+}
+
+function removeInspectModeExitButton() {
+    const button = document.getElementById('inspect-exit-button');
+    if (button) {
+        button.remove();
     }
 }
+
+function handleInspectEscapeKey(event) {
+    if (event.key === 'Escape') {
+        exitInspectMode();
+    }
+}
+function onInspectModelMouseDown(event) {
+    if (isInspecting) {
+        isInspectingModelDrag = true;
+        previousInspectMousePosition.x = event.clientX;
+        previousInspectMousePosition.y = event.clientY;
+    }
+}
+
+function onInspectModelMouseUp(event) {
+    isInspectingModelDrag = false;
+}
+
+function onInspectModelMouseMove(event) {
+    if (isInspecting && isInspectingModelDrag && inspectedObjectGroup) {
+        const deltaX = event.clientX - previousInspectMousePosition.x;
+        const deltaY = event.clientY - previousInspectMousePosition.y;
+
+        // Adjust sensitivity as needed
+        const rotationSpeed = 0.005; 
+
+        inspectedObjectGroup.rotation.y += deltaX * rotationSpeed;
+        inspectedObjectGroup.rotation.x += deltaY * rotationSpeed;
+
+        previousInspectMousePosition.x = event.clientX;
+        previousInspectMousePosition.y = event.clientY;
+    }
+}
+
+// --- End Inspect Mode Functions ---
 
 // --- Start ---
 init();
