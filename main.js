@@ -29,6 +29,12 @@ let whiteboardModel; // To store the loaded whiteboard model
 let tamagotchiPopup; // Renamed from modelPopup
 // let popupCloseButton; // This will now be handled by tamagotchi_game.js
 
+// Whiteboard Popup Elements
+let whiteboardPopup, whiteboardCanvas, whiteboardCtx, whiteboardSaveCloseBtn, whiteboardClearBtn, whiteboardColorBtns;
+let isDrawingOnWhiteboard = false;
+let whiteboardCurrentColor = 'black'; // Default drawing color
+let whiteboardLastX, whiteboardLastY; // To store the last mouse position for drawing
+
 // --- Inspect Mode Variables ---
 let isInspecting = false;
 let inspectedObjectGroup = null;
@@ -280,6 +286,157 @@ function init() {
         transitionLights(currentViewIndex); // Use new fade function
         rotateRoom(targetAngles[currentViewIndex]); 
     });
+
+    // Whiteboard popup setup
+    whiteboardPopup = document.getElementById('whiteboard-popup');
+    whiteboardCanvas = document.getElementById('whiteboard-canvas');
+    whiteboardCtx = whiteboardCanvas.getContext('2d');
+    whiteboardSaveCloseBtn = document.getElementById('whiteboard-save-close');
+    whiteboardClearBtn = document.getElementById('whiteboard-clear');
+    whiteboardColorBtns = document.querySelectorAll('.wb-color-btn');
+
+    // Whiteboard event listeners
+    whiteboardSaveCloseBtn.addEventListener('click', () => {
+        if (whiteboardModel && whiteboardCanvas && whiteboardCtx) {
+            console.log('[DEBUG] Attempting to apply drawing to whiteboard model.');
+            
+            // 1. Log canvas content as Data URL (original canvas content)
+            const canvasDataURL = whiteboardCanvas.toDataURL();
+            console.log('[DEBUG] Whiteboard Canvas Data URL (original):', canvasDataURL);
+            // CRITICAL: Please verify this Data URL in your browser. Does it show your drawing correctly?
+
+            try {
+                if (whiteboardCanvas.width === 0 || whiteboardCanvas.height === 0) {
+                    console.error('[ERROR] Whiteboard canvas has zero dimensions before texture creation.');
+                    hideWhiteboardPopup();
+                    return;
+                }
+
+                // Create a temporary canvas to pre-process for opaque background
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = whiteboardCanvas.width;
+                tempCanvas.height = whiteboardCanvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                // Fill with an opaque light grey background
+                tempCtx.fillStyle = '#f0f0f0'; // Light grey, good for testing
+                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+                // Draw the existing drawing (with its transparency) on top of the opaque background
+                tempCtx.drawImage(whiteboardCanvas, 0, 0);
+
+                console.log('[DEBUG] Pre-processed Whiteboard Canvas Data URL (for texture):', tempCanvas.toDataURL());
+
+                // Use this pre-processed canvas for the texture
+                const newTexture = new THREE.CanvasTexture(tempCanvas);
+                newTexture.flipY = false;
+                newTexture.needsUpdate = true;
+
+                let foundMesh = false;
+                whiteboardModel.traverse((child) => {
+                    if (child.isMesh && child.name === 'toy_024001') {
+                        console.log('[DEBUG] Found toy_024001 mesh for texture update.');
+                        if (child.material) {
+                            const oldMaterialState = {
+                                name: child.material.name,
+                                color: child.material.color.getHexString(),
+                                opacity: child.material.opacity,
+                                transparent: child.material.transparent,
+                                map_uuid: child.material.map ? child.material.map.uuid : null
+                            };
+                            console.log('[DEBUG] Material BEFORE update (toy_024001):', oldMaterialState);
+
+                            // Dispose old texture if it exists
+                            if (child.material.map && child.material.map.isTexture) {
+                                console.log('[DEBUG] Disposing old texture (toy_024001 UUID):', child.material.map.uuid);
+                                child.material.map.dispose();
+                            }
+                            
+                            // Apply new texture and set material properties
+                            child.material.map = newTexture;
+                            child.material.color.set(0xffffff); // KEY CHANGE: Set material base color to white
+                            child.material.transparent = false; // FORCE OPAQUE RENDERING
+                            child.material.opacity = 1.0;       // Ensure full opacity
+                            
+                            // Ensure updates are flagged
+                            if (child.material.map) child.material.map.needsUpdate = true; // Texture content changed
+                            child.material.needsUpdate = true;     // Material properties (map, color, transparent, opacity) changed
+                            
+                            // Log material state AFTER update
+                            const newMaterialState = {
+                                name: child.material.name,
+                                color: child.material.color.getHexString(), // Should now be 'ffffff'
+                                opacity: child.material.opacity,
+                                transparent: child.material.transparent,
+                                map_uuid: child.material.map ? child.material.map.uuid : null // Should be newTexture.uuid
+                            };
+                            console.log('[DEBUG] New texture (UUID:', newTexture.uuid, ') applied to toy_024001.');
+                            console.log('[DEBUG] Material AFTER update (toy_024001):', newMaterialState);
+                            foundMesh = true;
+                        } else {
+                            console.warn('[DEBUG] toy_024001 mesh has no material.');
+                        }
+                    }
+                });
+
+                if (!foundMesh) {
+                    console.warn('[DEBUG] toy_024001 mesh not found in whiteboardModel during texture application.');
+                }
+            } catch (error) {
+                console.error('[ERROR] Failed to apply texture to whiteboard:', error);
+            }
+        } else {
+            console.warn('[DEBUG] Whiteboard model, canvas, or context not available for saving texture.');
+        }
+        hideWhiteboardPopup();
+    });
+
+    whiteboardClearBtn.addEventListener('click', () => {
+        if(whiteboardCtx) {
+            // Clear by filling with an opaque white background
+            whiteboardCtx.fillStyle = '#FFFFFF'; // Opaque White
+            whiteboardCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
+            console.log('[DEBUG] Whiteboard canvas cleared and filled with opaque white background.');
+        }
+    });
+
+    whiteboardColorBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            whiteboardCurrentColor = btn.dataset.color;
+            if(whiteboardCtx) whiteboardCtx.strokeStyle = whiteboardCurrentColor;
+            
+            // Update active class for visual feedback
+            whiteboardColorBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            console.log('[DEBUG] Whiteboard color changed to:', whiteboardCurrentColor);
+        });
+    });
+
+    // Set black as active initially
+    const blackButton = document.querySelector('.wb-color-btn[data-color="black"]');
+    if (blackButton) blackButton.classList.add('active');
+
+    // Basic drawing listeners for the canvas
+    if (whiteboardCanvas) {
+        whiteboardCanvas.addEventListener('mousedown', (e) => {
+            isDrawingOnWhiteboard = true;
+            [whiteboardLastX, whiteboardLastY] = [e.offsetX, e.offsetY];
+        });
+
+        whiteboardCanvas.addEventListener('mousemove', (e) => {
+            if (!isDrawingOnWhiteboard) return;
+            if(whiteboardCtx) {
+                whiteboardCtx.beginPath();
+                whiteboardCtx.moveTo(whiteboardLastX, whiteboardLastY);
+                whiteboardCtx.lineTo(e.offsetX, e.offsetY);
+                whiteboardCtx.stroke();
+            }
+            [whiteboardLastX, whiteboardLastY] = [e.offsetX, e.offsetY];
+        });
+
+        whiteboardCanvas.addEventListener('mouseup', () => isDrawingOnWhiteboard = false);
+        whiteboardCanvas.addEventListener('mouseout', () => isDrawingOnWhiteboard = false); // Stop drawing if mouse leaves canvas
+    }
 }
 
 // Function to create a trapezoidal alpha map
@@ -785,6 +942,26 @@ function animate() {
     renderer.render(scene, camera);
 }
 
+// --- Whiteboard Popup Functions ---
+function showWhiteboardPopup() {
+    if (whiteboardPopup) {
+        whiteboardPopup.style.display = 'flex';
+        // Optionally, disable OrbitControls when popup is open
+        // controls.enabled = false;
+        console.log('[DEBUG] Whiteboard popup shown.');
+    }
+}
+
+function hideWhiteboardPopup() {
+    if (whiteboardPopup) {
+        whiteboardPopup.style.display = 'none';
+        // Optionally, re-enable OrbitControls when popup is closed
+        // controls.enabled = true;
+        console.log('[DEBUG] Whiteboard popup hidden.');
+        // TODO: Add logic to apply canvas drawing to 3D model texture here
+    }
+}
+
 // --- Mouse Wheel Handler for Gallery Scroll ---
 function onDocumentWheel(event) {
     if (currentViewIndex === 0) { // Only scroll gallery if it's the active view
@@ -1050,6 +1227,15 @@ function loadWhiteboardModel() {
             whiteboardModel.name = "whiteboard";
             roomGroup.add(whiteboardModel);
             console.log("Whiteboard model loaded and added to roomGroup from:", modelPath);
+
+            // Traverse and log child names to identify the drawing surface
+            console.log("Traversing whiteboardModel children:");
+            whiteboardModel.traverse(function (child) {
+                console.log(`- Child name: ${child.name}, type: ${child.type}`);
+                if (child.isMesh) {
+                    console.log(`  - Mesh material:`, child.material);
+                }
+            });
         },
         function (xhr) {
             console.log((xhr.loaded / xhr.total * 100) + '% loaded of Whiteboard');
@@ -1126,6 +1312,52 @@ function onDocumentMouseClick(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
+    // --- TEMPORARY: Check whiteboard interaction first for testing ---
+    const allIntersects = raycaster.intersectObjects(scene.children, true); // Intersect all scene children
+    console.log('[DEBUG] Raycaster (pre-view check) intersected objects:', allIntersects.length);
+
+    let designatedSurfaceClickedAndPopupShown = false;
+    console.log('[DEBUG] Checking intersected objects for whiteboard surface (toy_024001):');
+    for (let i = 0; i < allIntersects.length; i++) {
+        const intersect = allIntersects[i]; // Contains .object and .distance
+        const clickedObject = intersect.object;
+        
+        console.log(`  - Intersected: ${clickedObject.name} (UUID: ${clickedObject.uuid}, distance: ${intersect.distance.toFixed(3)})`);
+
+        if (isDescendant(whiteboardModel, clickedObject)) {
+            console.log(`    ↳ Is descendant of whiteboardModel.`);
+            if (clickedObject.name === 'toy_024001') {
+                console.log('[DEBUG] SUCCESS: Clicked on designated whiteboard drawing surface (toy_024001). Opening popup.');
+                showWhiteboardPopup();
+                designatedSurfaceClickedAndPopupShown = true;
+                return; // Interaction handled
+            } else {
+                console.log(`    ↳ Is part of whiteboardModel, but not 'toy_024001'.`);
+            }
+        } else {
+            // console.log(`    ↳ Not a descendant of whiteboardModel.`); // Optional: uncomment for more verbosity
+        }
+    }
+
+    if (!designatedSurfaceClickedAndPopupShown) {
+        let anyWhiteboardPartHit = false;
+        for (const intersect of allIntersects) {
+            if (isDescendant(whiteboardModel, intersect.object)) {
+                anyWhiteboardPartHit = true;
+                break;
+            }
+        }
+
+        if (anyWhiteboardPartHit) {
+             console.log('[DEBUG] Click intersected with whiteboardModel, but not the specific "toy_024001" surface, or "toy_024001" was occluded by another part of whiteboardModel that was closer to the camera.');
+        } else if (allIntersects.length > 0) {
+            console.log('[DEBUG] Click intersected with scene objects, but not any part of whiteboardModel.');
+        } else {
+             console.log('[DEBUG] No intersection with any scene objects (pre-view check was misleading, or scene.children was empty for raycast).');
+        }
+    }
+    // --- END TEMPORARY ---
+
     if (currentViewIndex !== 2) {
         console.log('[DEBUG] Interaction attempt outside back wall view. currentViewIndex:', currentViewIndex);
         return;
@@ -1188,6 +1420,10 @@ function onDocumentMouseClick(event) {
         } else {
             console.log('[DEBUG] deskModel does not exist.');
         }
+
+        // Note: Whiteboard interaction is now checked BEFORE the view index check for testing.
+        // If it needs to be view-specific, this older block can be reinstated or modified.
+
     } else {
         console.log('[DEBUG] No intersections with any scene objects.');
     }
