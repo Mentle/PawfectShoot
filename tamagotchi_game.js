@@ -250,13 +250,6 @@ function setupEventListeners() {
         });
     }
     
-    // Petting action
-    if (petArea) {
-        petArea.addEventListener('click', () => {
-            console.log("Petting animal...");
-            showHeartAnimation();
-        });
-    }
 
     // Booking Options
     document.querySelectorAll('.select-package-btn').forEach(button => {

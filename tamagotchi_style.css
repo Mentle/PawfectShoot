@@ -49,6 +49,30 @@ body, html {
     box-shadow: 5px 5px 10px rgba(0,0,0,0.3), inset 3px 3px 5px rgba(0,0,0,0.2); /* More pronounced shadow + inset */
     color: #3b3b3b; /* Darker text color for LCD 'pixels' */
     font-size: 0.9em; /* Slightly smaller base font for pixel look, adjust as needed */
+    position: relative; /* For the LCD overlay */
+    overflow: hidden; /* To contain the overlay within the border-radius */
+}
+
+.tamagotchi-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+        linear-gradient(rgba(0, 0, 0, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+    background-size: 4px 4px; /* Size of the pixel grid */
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4); /* Inner shadow for screen depth */
+    pointer-events: none; /* Allow interaction with content below */
+    z-index: 1; /* Position it above the background but below content */
+}
+
+/* Ensure all direct children of the content area are positioned above the overlay */
+.tamagotchi-content > * {
+    position: relative;
+    z-index: 2;
 }
 
 .tamagotchi-content h2 {
@@ -105,16 +129,10 @@ body, html {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: space-around; /* Distribute content evenly to reduce dead space */
     text-align: center;
-    padding: 15px;
+    padding: 20px 15px; /* Add a bit more vertical padding */
     box-sizing: border-box;
-    text-align: center;
-    /* Add flex properties to distribute content within each screen */
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between; /* This will push nav buttons to bottom if content is short */
-    align-items: center;
 }
 
 #size-selection-screen {
@@ -411,14 +429,46 @@ select, input[type="text"] {
 
 /* Main Tamagotchi Screen Layout */
 #tamagotchi-main-screen {
+    display: grid;
+    grid-template-rows: auto 1fr auto; /* Header, Main (stretches), Footer */
+    height: 100%;
+    width: 100%;
+    padding: 15px;
+    box-sizing: border-box;
+    text-align: center; /* Center the h2 */
+}
+
+#pet-area {
+    /* flex-grow is no longer needed with CSS Grid */
+    display: flex;
+    align-items: center; /* Vertically center the pet image */
+    justify-content: center; /* Horizontally center the pet image */
+    width: 100%;
+}
+
+.actions-container {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between; /* Pushes nav buttons to bottom, centers rest if space allows */
+    gap: 15px; /* Space between the two button rows */
     width: 100%;
-    height: 100%;
-    padding: 20px 10px;
-    box-sizing: border-box;
+    /* Removed margin-top: auto; to resolve layout instability conflict with flex-grow. */
+}
+
+.pet-display-area {
+    text-align: center;
+    margin-bottom: 15px; /* Space below the pet */
+}
+
+.interaction-buttons {
+    display: flex;
+    gap: 10px; /* Space between feed/play/pet buttons */
+    margin-bottom: 20px; /* Space below the interaction buttons */
+}
+
+.main-action-buttons {
+    display: flex;
+    gap: 10px; /* Space between restart/book buttons */
 }
 
 #pet-area {
