@@ -416,26 +416,63 @@ function init() {
     const blackButton = document.querySelector('.wb-color-btn[data-color="black"]');
     if (blackButton) blackButton.classList.add('active');
 
-    // Basic drawing listeners for the canvas
+    // Basic drawing listeners for the canvas (mouse and touch)
     if (whiteboardCanvas) {
-        whiteboardCanvas.addEventListener('mousedown', (e) => {
-            isDrawingOnWhiteboard = true;
-            [whiteboardLastX, whiteboardLastY] = [e.offsetX, e.offsetY];
-        });
+        // Mouse events
+        whiteboardCanvas.addEventListener('mousedown', handleDrawStart);
+        whiteboardCanvas.addEventListener('mousemove', handleDrawMove);
+        whiteboardCanvas.addEventListener('mouseup', handleDrawEnd);
+        whiteboardCanvas.addEventListener('mouseout', handleDrawEnd);
 
-        whiteboardCanvas.addEventListener('mousemove', (e) => {
-            if (!isDrawingOnWhiteboard) return;
-            if(whiteboardCtx) {
-                whiteboardCtx.beginPath();
-                whiteboardCtx.moveTo(whiteboardLastX, whiteboardLastY);
-                whiteboardCtx.lineTo(e.offsetX, e.offsetY);
-                whiteboardCtx.stroke();
-            }
-            [whiteboardLastX, whiteboardLastY] = [e.offsetX, e.offsetY];
-        });
-
-            whiteboardCanvas.addEventListener('mouseout', () => isDrawingOnWhiteboard = false); // Stop drawing if mouse leaves canvas
+        // Touch events
+        whiteboardCanvas.addEventListener('touchstart', handleDrawStart, { passive: false });
+        whiteboardCanvas.addEventListener('touchmove', handleDrawMove, { passive: false });
+        whiteboardCanvas.addEventListener('touchend', handleDrawEnd);
+        whiteboardCanvas.addEventListener('touchcancel', handleDrawEnd);
     }
+}
+
+// --- Whiteboard Drawing Handlers (Mouse & Touch) ---
+function getCanvasCoordinates(event) {
+    const rect = whiteboardCanvas.getBoundingClientRect();
+    let clientX, clientY;
+
+    if (event.touches && event.touches.length > 0) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+    } else {
+        clientX = event.clientX;
+        clientY = event.clientY;
+    }
+    
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    return { x, y };
+}
+
+function handleDrawStart(event) {
+    if (event.touches) event.preventDefault();
+    isDrawingOnWhiteboard = true;
+    const { x, y } = getCanvasCoordinates(event);
+    [whiteboardLastX, whiteboardLastY] = [x, y];
+}
+
+function handleDrawMove(event) {
+    if (!isDrawingOnWhiteboard) return;
+    if (event.touches) event.preventDefault();
+
+    const { x, y } = getCanvasCoordinates(event);
+    if (whiteboardCtx) {
+        whiteboardCtx.beginPath();
+        whiteboardCtx.moveTo(whiteboardLastX, whiteboardLastY);
+        whiteboardCtx.lineTo(x, y);
+        whiteboardCtx.stroke();
+    }
+    [whiteboardLastX, whiteboardLastY] = [x, y];
+}
+
+function handleDrawEnd(event) {
+    isDrawingOnWhiteboard = false;
 }
 
 function updateControlsForView(angle) {
