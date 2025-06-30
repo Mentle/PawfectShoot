@@ -74,6 +74,7 @@ const container = document.getElementById('container');
 // Angles for roomGroup rotation to bring a wall to the front
 const targetAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2]; // Front, Right(Rotate Room Left), Back, Left(Rotate Room Right)
 let currentViewIndex = 0; // Start facing front (room rotation 0)
+let currentRotationY = 0; // Variable to track the final rotation angle
 const rotationDuration = 500; // ms for rotation animation
 const lightFadeDuration = 500; // ms for light fade animation
 
@@ -130,7 +131,7 @@ function init() {
 
     // Controls
     controls = new OrbitControls(camera, renderer.domElement);
-    controls.enabled = false; // Disable OrbitControls interaction
+    controls.enabled = false; // Always disable controls when exiting inspect mode
     // controls.target.set(0, 0, 0); // No longer strictly necessary if camera doesn't rotate, but doesn't hurt
 
     // Texture Loader
@@ -239,10 +240,9 @@ function init() {
     renderer.domElement.addEventListener('touchmove', onGalleryInteractionMove, { passive: false }); // For touch drag
     renderer.domElement.addEventListener('wheel', onDocumentWheel, { passive: false }); // For mouse wheel scroll
 
-    // Initial calculation
-    updateDimensionsAndOffsets();
-    logInstructions();
-    // Set initial intensities directly: consistent lighting
+    // Initial call to set everything up based on the starting view
+    transitionLights(); // Set initial lighting based on starting angle (0)
+    updateControlsForView(currentRotationY); // Set initial control state
     ceilingLight.intensity = 30; // Always on at intensity 30
     spotLight.intensity = 0;    // Always off
 
@@ -434,9 +434,24 @@ function init() {
             [whiteboardLastX, whiteboardLastY] = [e.offsetX, e.offsetY];
         });
 
-        whiteboardCanvas.addEventListener('mouseup', () => isDrawingOnWhiteboard = false);
-        whiteboardCanvas.addEventListener('mouseout', () => isDrawingOnWhiteboard = false); // Stop drawing if mouse leaves canvas
+            whiteboardCanvas.addEventListener('mouseout', () => isDrawingOnWhiteboard = false); // Stop drawing if mouse leaves canvas
     }
+}
+
+function updateControlsForView(angle) {
+    const galleryViewAngle = 0;
+    const tolerance = 0.001;
+
+    // Normalize the angle to be within -PI to PI for consistent checks
+    const normalizedAngle = (angle + Math.PI) % (2 * Math.PI) - Math.PI;
+
+    // Enable controls only when in the main gallery view
+    if (Math.abs(normalizedAngle - galleryViewAngle) < tolerance) {
+        controls.enabled = true;
+    } else {
+        controls.enabled = false;
+    }
+    // console.log(`[CONTROLS] View angle: ${normalizedAngle.toFixed(2)}, Controls enabled: ${controls.enabled}`);
 }
 
 // Function to create a trapezoidal alpha map
@@ -1117,6 +1132,14 @@ function rotateRoom(targetAngle) {
         .start();
     
     roomGroup.userData.activeTween = tween; // Store the reference to the new active tween
+
+    tween.onComplete(() => {
+        currentRotationY = targetAngle;
+        updateControlsForView(currentRotationY);
+        if (roomGroup.userData && roomGroup.userData.activeTween === tween) {
+            delete roomGroup.userData.activeTween;
+        }
+    });
 }
 
 // --- GLTF Export Function ---
@@ -1529,11 +1552,14 @@ function enterInspectMode(clickedMesh, partnerMeshName) {
     controls.enableRotate = false; // Disable OrbitControls rotation
     controls.autoRotate = false; // Turn off auto-rotate if it was on
 
-    // Add event listeners for manual model rotation
-    renderer.domElement.addEventListener('mousedown', onInspectModelMouseDown, false);
-    renderer.domElement.addEventListener('mousemove', onInspectModelMouseMove, false);
-    renderer.domElement.addEventListener('mouseup', onInspectModelMouseUp, false);
-    renderer.domElement.addEventListener('mouseleave', onInspectModelMouseUp, false); // Also stop drag if mouse leaves canvas
+    // Add event listeners for manual model rotation (mouse and touch)
+    renderer.domElement.addEventListener('mousedown', onInspectModelDragStart, false);
+    renderer.domElement.addEventListener('mousemove', onInspectModelDragMove, false);
+    renderer.domElement.addEventListener('mouseup', onInspectModelDragEnd, false);
+    renderer.domElement.addEventListener('mouseleave', onInspectModelDragEnd, false); // Also stop drag if mouse leaves canvas
+    renderer.domElement.addEventListener('touchstart', onInspectModelDragStart, { passive: false });
+    renderer.domElement.addEventListener('touchmove', onInspectModelDragMove, { passive: false });
+    renderer.domElement.addEventListener('touchend', onInspectModelDragEnd, false);
 
     // Adjust camera for optimal view
     const size = groupBox.getSize(new THREE.Vector3());
@@ -1597,16 +1623,20 @@ function exitInspectMode() {
     // Restore camera and controls
     camera.position.copy(originalCameraPosition);
     controls.target.copy(originalControlsTarget);
-    controls.enabled = true; // Re-enable controls for normal scene interaction
+    controls.enabled = false; // Keep controls disabled after exiting inspect mode
+    updateControlsForView(currentRotationY); // Update controls based on the current view angle
     controls.enableZoom = true; // Re-enable OrbitControls zoom
     controls.enableRotate = true; // Re-enable OrbitControls rotation
     controls.update();
 
-    // Remove event listeners for manual model rotation
-    renderer.domElement.removeEventListener('mousedown', onInspectModelMouseDown, false);
-    renderer.domElement.removeEventListener('mousemove', onInspectModelMouseMove, false);
-    renderer.domElement.removeEventListener('mouseup', onInspectModelMouseUp, false);
-    renderer.domElement.removeEventListener('mouseleave', onInspectModelMouseUp, false);
+    // Remove event listeners for model rotation
+    renderer.domElement.removeEventListener('mousedown', onInspectModelDragStart, false);
+    renderer.domElement.removeEventListener('mousemove', onInspectModelDragMove, false);
+    renderer.domElement.removeEventListener('mouseup', onInspectModelDragEnd, false);
+    renderer.domElement.removeEventListener('mouseleave', onInspectModelDragEnd, false);
+    renderer.domElement.removeEventListener('touchstart', onInspectModelDragStart, { passive: false });
+    renderer.domElement.removeEventListener('touchmove', onInspectModelDragMove, { passive: false });
+    renderer.domElement.removeEventListener('touchend', onInspectModelDragEnd, false);
 
     isInspectingModelDrag = false;
 
@@ -1648,32 +1678,60 @@ function handleInspectEscapeKey(event) {
         exitInspectMode();
     }
 }
-function onInspectModelMouseDown(event) {
-    if (isInspecting) {
-        isInspectingModelDrag = true;
-        previousInspectMousePosition.x = event.clientX;
-        previousInspectMousePosition.y = event.clientY;
+
+function onInspectModelDragStart(event) {
+    if (!isInspecting) return;
+    // Prevent default browser actions, like scrolling, on touch devices
+    if (event.touches) {
+        event.preventDefault();
     }
+    isInspectingModelDrag = true;
+
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    previousInspectMousePosition = {
+        x: clientX,
+        y: clientY
+    };
 }
 
-function onInspectModelMouseUp(event) {
+function onInspectModelDragMove(event) {
+    if (!isInspecting || !isInspectingModelDrag || !inspectedObjectGroup) return;
+    
+    // Prevent default browser actions
+    if (event.touches) {
+        event.preventDefault();
+    }
+
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    const deltaMove = {
+        x: clientX - previousInspectMousePosition.x,
+        y: clientY - previousInspectMousePosition.y
+    };
+
+    const rotationSpeed = 0.005;
+
+    const deltaRotationQuaternion = new THREE.Quaternion()
+        .setFromEuler(new THREE.Euler(
+            deltaMove.y * rotationSpeed,
+            deltaMove.x * rotationSpeed,
+            0,
+            'XYZ'
+        ));
+
+    inspectedObjectGroup.quaternion.multiplyQuaternions(deltaRotationQuaternion, inspectedObjectGroup.quaternion);
+
+    previousInspectMousePosition = {
+        x: clientX,
+        y: clientY
+    };
+}
+
+function onInspectModelDragEnd(event) {
     isInspectingModelDrag = false;
-}
-
-function onInspectModelMouseMove(event) {
-    if (isInspecting && isInspectingModelDrag && inspectedObjectGroup) {
-        const deltaX = event.clientX - previousInspectMousePosition.x;
-        const deltaY = event.clientY - previousInspectMousePosition.y;
-
-        // Adjust sensitivity as needed
-        const rotationSpeed = 0.005; 
-
-        inspectedObjectGroup.rotation.y += deltaX * rotationSpeed;
-        inspectedObjectGroup.rotation.x += deltaY * rotationSpeed;
-
-        previousInspectMousePosition.x = event.clientX;
-        previousInspectMousePosition.y = event.clientY;
-    }
 }
 
 // --- End Inspect Mode Functions ---
